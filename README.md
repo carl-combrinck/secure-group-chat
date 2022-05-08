@@ -10,7 +10,7 @@ A secure group chat application using a PGP-based cryptosystem.
 
 The following dependencies are required (with recommended versions):
 
-- Java 15 
+- Java 18 
 - Maven 3.8.5
 
 ### Installation
