@@ -19,7 +19,7 @@ import org.junit.Test;
 import com.nis.shared.PGPUtilities;
 
 /**
- * Unit test for simple App.
+ * Unit tests for Secure Group Chat.
  */
 public class AppTest 
 {
@@ -67,6 +67,15 @@ public class AppTest
         byte[] raw = TEST_STRING.getBytes();
         byte[] signature = PGPUtilities.computeSignature(raw, pair.getPrivate());
         assertTrue(PGPUtilities.verifySignature(raw, signature, pair.getPublic()));
+    }
+
+    @Test
+    public void testConcatenation() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
+    NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
+    {
+        byte[] first = TEST_STRING.substring(0, 30).getBytes();
+        byte[] second = TEST_STRING.substring(30).getBytes();
+        assertTrue((new String(PGPUtilities.concatenate(first, second))).equals(TEST_STRING));
     }
 
 }
