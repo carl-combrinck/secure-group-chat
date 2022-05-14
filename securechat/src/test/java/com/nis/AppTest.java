@@ -56,4 +56,17 @@ public class AppTest
         assertTrue((new String(decrypted)).equals(TEST_STRING));
     }
 
+    @Test
+    public void testSignature() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
+    NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
+    {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+
+        byte[] raw = TEST_STRING.getBytes();
+        byte[] signature = PGPUtilities.computeSignature(raw, pair.getPrivate());
+        assertTrue(PGPUtilities.verifySignature(raw, signature, pair.getPublic()));
+    }
+
 }
