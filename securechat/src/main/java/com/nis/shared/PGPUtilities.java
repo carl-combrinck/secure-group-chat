@@ -178,4 +178,20 @@ public class PGPUtilities{
         return Arrays.equals(computeHash(message), decryptWithRSA(signature, publicKey));
     }
 
+    
+    /** 
+     * Concatenates two byte arrays
+     * 
+     * @param first The first byte array
+     * @param second The second byte array
+     * @return The result of the concatenation
+     * @throws IOException
+     */
+    public static byte[] concatenate(byte[] first, byte[] second) throws IOException{
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        outputStream.write(first);
+        outputStream.write(second);
+        return outputStream.toByteArray();
+    }
+
 }
