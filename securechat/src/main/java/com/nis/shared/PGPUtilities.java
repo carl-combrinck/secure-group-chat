@@ -52,6 +52,24 @@ public class PGPUtilities{
         MessageDigest payloadDigest = MessageDigest.getInstance(HASH_ALGORITHM);
         return payloadDigest.digest(bytes);
     }
+
+    
+    /** 
+     * Signs the hash of a message using a private key
+     * 
+     * @param bytes The message
+     * @param privateKey The private key of the sender
+     * @return The signature
+     * @throws InvalidKeyException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     */
+    public static byte[] computeSignature(byte[] bytes, Key privateKey) throws InvalidKeyException, NoSuchAlgorithmException, 
+    NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException{
+        return encryptWithRSA(computeHash(bytes), privateKey);
+    }
     
     /** 
      * Encrypts a byte[] using RSA encryption with the given key
@@ -139,6 +157,25 @@ public class PGPUtilities{
             inflaterOutputStream.close();
         }  
         return outputStream.toByteArray();    
+    }
+    
+    /** 
+     * Verifies a signature for a given message by comparing the hashed message with 
+     * the signature after decrypting with the sender's public key
+     * 
+     * @param message 
+     * @param signature
+     * @param publicKey
+     * @return Whether the signature is correct 
+     * @throws InvalidKeyException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     */
+    public static boolean verifySignature(byte[] message, byte[] signature, Key publicKey) throws InvalidKeyException, 
+    NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException{
+        return Arrays.equals(computeHash(message), decryptWithRSA(signature, publicKey));
     }
 
 }
