@@ -10,7 +10,10 @@ import java.security.NoSuchAlgorithmException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
 
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 
@@ -42,9 +45,7 @@ public class AppTest
     public void testRSA() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
     NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
     {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
-        KeyPair pair = generator.generateKeyPair();
+        KeyPair pair = PGPUtilities.generateRSAKeyPair();
 
         byte[] raw = TEST_STRING.getBytes();
         byte[] encrypted = PGPUtilities.encryptWithRSA(raw, pair.getPrivate());
@@ -57,12 +58,23 @@ public class AppTest
     }
 
     @Test
+    public void testAES() throws InvalidKeyException, InvalidAlgorithmParameterException, 
+    IllegalBlockSizeException, BadPaddingException, NoSuchAlgorithmException, NoSuchPaddingException 
+    {
+        SecretKey key = PGPUtilities.generateAESKey();
+        IvParameterSpec iv = PGPUtilities.generateIV();
+
+        byte[] raw = TEST_STRING.getBytes();
+        byte[] encrypted = PGPUtilities.encryptWithAES(raw, key, iv);
+        byte[] decrypted = PGPUtilities.decryptWithAES(encrypted, key, iv);
+        assertTrue((new String(decrypted)).equals(TEST_STRING));
+    }
+
+    @Test
     public void testSignature() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
     NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
     {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
-        KeyPair pair = generator.generateKeyPair();
+        KeyPair pair = PGPUtilities.generateRSAKeyPair();
 
         byte[] raw = TEST_STRING.getBytes();
         byte[] signature = PGPUtilities.computeSignature(raw, pair.getPrivate());
