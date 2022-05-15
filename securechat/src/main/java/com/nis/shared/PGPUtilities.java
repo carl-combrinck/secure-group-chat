@@ -7,14 +7,22 @@ import java.util.zip.InflaterOutputStream;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 
 /**
  * PGPUtilities is a class containing all the functionality necessary for implementing a PGP-based communication session between two hosts.
@@ -30,9 +38,12 @@ public class PGPUtilities{
      * Class constants
      */
     private final static String RSA_ALGORITHM = "RSA/ECB/PKCS1Padding";
+    private final static int RSA_KEY_SIZE = 2048;
     private final static String AES_ALGORITHM = "AES/CBC/PKCS5Padding";
+    private final static int AES_KEY_SIZE = 256;
+    private final static int AES_IV_SIZE = 128;
     private final static String HASH_ALGORITHM = "SHA-256";
-    private final static int SIGNATURE_SIZE = 32;
+    private final static int SIGNATURE_SIZE = 256;
 
     /**
      * Empty, private default constructor (cannot instantiate class)
@@ -177,7 +188,6 @@ public class PGPUtilities{
     NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException{
         return Arrays.equals(computeHash(message), decryptWithRSA(signature, publicKey));
     }
-
     
     /** 
      * Concatenates two byte arrays
@@ -193,5 +203,87 @@ public class PGPUtilities{
         outputStream.write(second);
         return outputStream.toByteArray();
     }
+    
+    /** 
+     * Generates a random RSA key pair
+     * 
+     * @return The random keypair
+     * @throws NoSuchAlgorithmException
+     */
+    public static KeyPair generateRSAKeyPair() throws NoSuchAlgorithmException{
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        SecureRandom random = SecureRandom.getInstanceStrong();
+        generator.initialize(RSA_KEY_SIZE, random);
+        return generator.generateKeyPair();
+    }
+    
+    /** 
+     * Generates a random AES key
+     * 
+     * @return The random key
+     * @throws NoSuchAlgorithmException
+     */
+    public static SecretKey generateAESKey() throws NoSuchAlgorithmException{
+        KeyGenerator generator = KeyGenerator.getInstance("AES");
+        SecureRandom random = SecureRandom.getInstanceStrong();
+        generator.init(AES_KEY_SIZE, random);
+        return generator.generateKey();
+    }
+    
+    /** 
+     * Generates a random initialization vector for AES encryption
+     * 
+     * @return The random initialization vector
+     * @throws NoSuchAlgorithmException
+     */
+    public static IvParameterSpec generateIV() throws NoSuchAlgorithmException{
+        SecureRandom random = SecureRandom.getInstanceStrong();
+        byte[] initializationVector = new byte[AES_IV_SIZE/8];
+        random.nextBytes(initializationVector);
+        return new IvParameterSpec(initializationVector);
+    }
 
+    /** 
+     * Encrypts a message using AES encryption and the provided key and iv
+     * 
+     * @param bytes The bytes of the message to encrypt
+     * @param key The key
+     * @param iv The initialization vector
+     * @return The encrypted message bytes
+     * @throws InvalidKeyException
+     * @throws InvalidAlgorithmParameterException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     */
+    public static byte[] encryptWithAES(byte[] bytes, SecretKey key, IvParameterSpec iv) throws InvalidKeyException, 
+    InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, 
+    NoSuchAlgorithmException, NoSuchPaddingException{
+        Cipher encryptCipher = Cipher.getInstance(AES_ALGORITHM);
+        encryptCipher.init(Cipher.ENCRYPT_MODE, key, iv);
+        return encryptCipher.doFinal(bytes);
+    }
+
+    /** 
+     * Decrypts a message using AES decryption and the provided key and iv
+     * 
+     * @param bytes The bytes of the message to decrypt
+     * @param key The key
+     * @param iv The initialization vector
+     * @return The decrypted message bytes
+     * @throws InvalidKeyException
+     * @throws InvalidAlgorithmParameterException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     */
+    public static byte[] decryptWithAES(byte[] bytes, SecretKey key, IvParameterSpec iv) throws InvalidKeyException, 
+    InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, 
+    NoSuchAlgorithmException, NoSuchPaddingException{
+        Cipher decryptCipher = Cipher.getInstance(AES_ALGORITHM);
+        decryptCipher.init(Cipher.DECRYPT_MODE, key, iv);
+        return decryptCipher.doFinal(bytes);
+    }
 }
