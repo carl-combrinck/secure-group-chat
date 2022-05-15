@@ -26,12 +26,21 @@ import com.nis.shared.PGPUtilities;
  */
 public class AppTest 
 {
-
+    /**
+     * Test string containing all 'standard' characters
+     */
     private final String TEST_STRING = "0123456789" +
                             "abcdefghijklmnopqrstuvwxyz" +
                             "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-                            ".,/;\"'\\{}[]-_=+?!@#$%^&*()`~";
-
+                            ".,/;\"'\\{}[]-_=+?!@#$%^&*()`~<>|" +
+                            "\n\t\b\f\r";
+    
+    /** 
+     * Tests compression and decompression using PGPUtilities 
+     * zip-based implementation
+     * 
+     * @throws IOException
+     */
     @Test
     public void testCompression() throws IOException
     {
@@ -41,6 +50,16 @@ public class AppTest
         assertTrue((new String(uncompressed)).equals(TEST_STRING));
     }
 
+    /** 
+     * Tests RSA encryption and decryption
+     * 
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     * @throws InvalidKeyException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     */
     @Test
     public void testRSA() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
     NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
@@ -57,6 +76,16 @@ public class AppTest
         assertTrue((new String(decrypted)).equals(TEST_STRING));
     }
 
+    /** 
+     * Tests AES encryption and decryption
+     * 
+     * @throws InvalidKeyException
+     * @throws InvalidAlgorithmParameterException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     */
     @Test
     public void testAES() throws InvalidKeyException, InvalidAlgorithmParameterException, 
     IllegalBlockSizeException, BadPaddingException, NoSuchAlgorithmException, NoSuchPaddingException 
@@ -69,7 +98,17 @@ public class AppTest
         byte[] decrypted = PGPUtilities.decryptWithAES(encrypted, key, iv);
         assertTrue((new String(decrypted)).equals(TEST_STRING));
     }
-
+    
+    /** 
+     * Tests signature generation and verification
+     * 
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     * @throws InvalidKeyException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     */
     @Test
     public void testSignature() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
     NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
@@ -81,12 +120,23 @@ public class AppTest
         assertTrue(PGPUtilities.verifySignature(raw, signature, pair.getPublic()));
     }
 
+    /** 
+     * Tests byte array concatenation
+     * 
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     * @throws InvalidKeyException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     */
     @Test
     public void testConcatenation() throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
     NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException
     {
-        byte[] first = TEST_STRING.substring(0, 30).getBytes();
-        byte[] second = TEST_STRING.substring(30).getBytes();
+        int randomIndex = (int)(Math.random()*(TEST_STRING.length()+1));
+        byte[] first = TEST_STRING.substring(0, randomIndex).getBytes();
+        byte[] second = TEST_STRING.substring(randomIndex).getBytes();
         assertTrue((new String(PGPUtilities.concatenate(first, second))).equals(TEST_STRING));
     }
 
