@@ -1,6 +1,7 @@
 package com.nis.shared;
 
 import java.util.Arrays;
+import java.util.logging.Logger;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
 
@@ -11,6 +12,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,6 +25,7 @@ import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.SignatureException;
 
 /**
  * PGPUtilities is a class containing all the functionality necessary for implementing a PGP-based communication session between two hosts.
@@ -42,6 +45,7 @@ public class PGPUtilities{
     private final static String AES_ALGORITHM = "AES/CBC/PKCS5Padding";
     private final static int AES_KEY_SIZE = 256;
     private final static int AES_IV_SIZE = 128;
+    private final static int SESSION_DATA_BYTES = RSA_KEY_SIZE/8;
     private final static String HASH_ALGORITHM = "SHA-256";
     private final static int SIGNATURE_SIZE = 256;
 
@@ -53,7 +57,7 @@ public class PGPUtilities{
     }
     
     /** 
-     * Computes a hash of the input bytes
+     * Computes a SHA256 hash of the input bytes
      * 
      * @param bytes The byte[] containing the payload/message bytes
      * @return The byte[] containing the hashed message bytes
@@ -63,10 +67,9 @@ public class PGPUtilities{
         MessageDigest payloadDigest = MessageDigest.getInstance(HASH_ALGORITHM);
         return payloadDigest.digest(bytes);
     }
-
     
     /** 
-     * Signs the hash of a message using a private key
+     * Signs the hash of a message using a private key with RSA encryption
      * 
      * @param bytes The message
      * @param privateKey The private key of the sender
@@ -94,7 +97,7 @@ public class PGPUtilities{
      * @throws IllegalBlockSizeException
      * @throws BadPaddingException
      */
-    public static byte[] encryptWithRSA(byte[] bytes, Key key) throws NoSuchAlgorithmException, NoSuchPaddingException, 
+    public static byte[] encryptWithRSA(final byte[] bytes, Key key) throws NoSuchAlgorithmException, NoSuchPaddingException, 
     InvalidKeyException, IllegalBlockSizeException, BadPaddingException{
         Cipher encryptCipher = Cipher.getInstance(RSA_ALGORITHM);
         encryptCipher.init(Cipher.ENCRYPT_MODE, key);
@@ -171,8 +174,8 @@ public class PGPUtilities{
     }
     
     /** 
-     * Verifies a signature for a given message by comparing the hashed message with 
-     * the signature after decrypting with the sender's public key
+     * Verifies signature for a given message by comparing the hashed message with 
+     * the signature after decrypting with the sender's public key using RSA
      * 
      * @param message 
      * @param signature
@@ -212,8 +215,7 @@ public class PGPUtilities{
      */
     public static KeyPair generateRSAKeyPair() throws NoSuchAlgorithmException{
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-        SecureRandom random = SecureRandom.getInstanceStrong();
-        generator.initialize(RSA_KEY_SIZE, random);
+        generator.initialize(RSA_KEY_SIZE);
         return generator.generateKeyPair();
     }
     
@@ -225,13 +227,12 @@ public class PGPUtilities{
      */
     public static SecretKey generateAESKey() throws NoSuchAlgorithmException{
         KeyGenerator generator = KeyGenerator.getInstance("AES");
-        SecureRandom random = SecureRandom.getInstanceStrong();
-        generator.init(AES_KEY_SIZE, random);
+        generator.init(AES_KEY_SIZE);
         return generator.generateKey();
     }
     
     /** 
-     * Generates a random initialization vector for AES encryption
+     * Generates a random 16 byte initialization vector for AES encryption
      * 
      * @return The random initialization vector
      * @throws NoSuchAlgorithmException
@@ -244,7 +245,7 @@ public class PGPUtilities{
     }
 
     /** 
-     * Encrypts a message using AES encryption and the provided key and iv
+     * Encrypts a message using AES encryption with the provided key and iv
      * 
      * @param bytes The bytes of the message to encrypt
      * @param key The key
@@ -266,7 +267,7 @@ public class PGPUtilities{
     }
 
     /** 
-     * Decrypts a message using AES decryption and the provided key and iv
+     * Decrypts a message using AES decryption with the provided key and iv
      * 
      * @param bytes The bytes of the message to decrypt
      * @param key The key
@@ -285,5 +286,148 @@ public class PGPUtilities{
         Cipher decryptCipher = Cipher.getInstance(AES_ALGORITHM);
         decryptCipher.init(Cipher.DECRYPT_MODE, key, iv);
         return decryptCipher.doFinal(bytes);
+    }
+    
+    /** 
+     * Returns a subarray of a given byte array
+     * 
+     * @param bytes The byte[] to extract from
+     * @param start The starting index (inclusive)
+     * @param end The ending index (exclusive)
+     * @return The subarray
+     */
+    public static byte[] slice(byte[] bytes, int start, int end){
+        return Arrays.copyOfRange(bytes, start, end);
+    }
+    
+    /** 
+     * Logs PGP encoding information
+     * 
+     * @param logger The logger
+     * @param raw The raw message
+     * @param sign The message signature
+     * @param zip The compressed signed message
+     * @param sesh The session data
+     * @param emsg The encrypted message
+     * @param esesh The encrypted session data
+     * @param pgp The PGP message
+     */
+    private static void logEncode(Logger logger, byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp){
+        final String line = "\n--------------------------\n";
+        String log = "Encoding message...\n" +
+        "RAW MESSAGE:" + line + "%s" + line +
+        "SIGNATURE:" + line+ "%s" + line +
+        "COMPRESSED:" + line + "%s" + line +
+        "SESSION KEY AND IV:" + line + "%s" + line +
+        "ENCRYPTED MESSAGE:" + line + "%s" + line +
+        "ENCRYPTED SESSION:" + line + "%s" + line +
+        "PGP MESSAGE:" + line + "%s" + line;
+        logger.info(String.format(log, new String(raw), new String(sign), new String(zip), 
+            new String(sesh), new String(emsg), new String(esesh), new String(pgp)));
+    }
+    
+    /** 
+     * Logs PGP decoding information
+     * 
+     * @param logger The logger
+     * @param raw The raw message
+     * @param sign The message signature
+     * @param zip The compressed signed message
+     * @param sesh The session data
+     * @param emsg The encrypted message
+     * @param esesh The encrypted session data
+     * @param pgp The PGP message
+     */
+    private static void logDecode(Logger logger, byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp){
+        final String line = "\n--------------------------\n";
+        String log = "Decoding message...\n" +
+        "PGP MESSAGE:" + line + "%s" + line +
+        "ENCRYPTED SESSION:" + line + "%s" + line +
+        "ENCRYPTED MESSAGE:" + line + "%s" + line +
+        "SESSION KEY AND IV:" + line + "%s" + line +
+        "COMPRESSED:" + line + "%s" + line +
+        "SIGNATURE:" + line+ "%s" + line +
+        "RAW MESSAGE:" + line + "%s" + line;
+        logger.info(String.format(log, new String(pgp), new String(esesh), new String(emsg), 
+        new String(sesh), new String(zip), new String(sign), new String(raw)));
+    }
+
+    /** 
+     * Encodes a raw message using PGP-based techniques from tranmission from the sender to a particular recipient
+     * 
+     * @param message The raw message
+     * @param senderPrivateKey The private key of the sender
+     * @param receiverPublicKey The public key of the receiver
+     * @param logger The logger
+     * @return The encoded PGP message
+     * @throws InvalidKeyException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws IOException
+     * @throws InvalidAlgorithmParameterException
+     */
+    public static byte[] encode(byte[] message, Key senderPrivateKey, Key receiverPublicKey, Logger logger) throws InvalidKeyException, 
+    NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException, 
+    InvalidAlgorithmParameterException{
+        // Sign and compress message
+        byte[] signature = computeSignature(message, senderPrivateKey);
+        byte[] compressedSignedMessage = compress(concatenate(signature, message));
+        // Generate session key and iv
+        SecretKey sessionKey = generateAESKey();
+        IvParameterSpec sessionIV = generateIV();
+        byte[] sessionData = concatenate(sessionIV.getIV(), sessionKey.getEncoded());
+        // Encrypt message with session key and iv
+        byte[] encryptedMessage = encryptWithAES(compressedSignedMessage, sessionKey, sessionIV);
+        // Encrypt session data with receiver public key
+        byte[] encryptedSessionData = encryptWithRSA(sessionData, receiverPublicKey);
+        byte[] encodedMessage = concatenate(encryptedSessionData, encryptedMessage);
+        // Logging
+        logEncode(logger, message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
+        return encodedMessage;
+    }
+
+    /** 
+     * Decodes a PGP message received from a particular sender
+     * 
+     * @param encodedMessage The encoded PGP message
+     * @param receiverPrivateKey The private key of the recipient
+     * @param senderPublicKey The public key of the sender
+     * @param logger The logger
+     * @return The raw, decoded message
+     * @throws InvalidKeyException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws InvalidAlgorithmParameterException
+     * @throws IOException
+     * @throws SignatureException
+     */
+    public static byte[] decode(byte[] encodedMessage, Key receiverPrivateKey, Key senderPublicKey, Logger logger) throws InvalidKeyException, 
+    NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException, 
+    IOException, SignatureException{
+        // Extract encrypted session and message data
+        byte[] encryptedSessionData = slice(encodedMessage, 0, SESSION_DATA_BYTES);
+        byte[] encryptedMessage = slice(encodedMessage, SESSION_DATA_BYTES, encodedMessage.length);
+        // Decrypt encrypted session data with RSA to obtain session key and IV
+        byte[] sessionData = decryptWithRSA(encryptedSessionData, receiverPrivateKey);
+        SecretKey sessionKey = new SecretKeySpec(sessionData, AES_IV_SIZE/8, AES_KEY_SIZE/8, "AES");
+        IvParameterSpec sessionIV = new IvParameterSpec(slice(sessionData, 0, AES_IV_SIZE/8));
+        // Decrypt encryted message with AES to obtain compressed signed message
+        byte[] compressedSignedMessage = decryptWithAES(encryptedMessage, sessionKey, sessionIV);
+        // Decompress
+        byte[] signedMessage = decompress(compressedSignedMessage);
+        // Separate message and signature
+        byte[] signature = slice(signedMessage, 0, SIGNATURE_SIZE);
+        byte[] message = slice(signedMessage, SIGNATURE_SIZE, signedMessage.length);
+        // Check signature before returning
+        if(!verifySignature(message, signature, senderPublicKey)){
+            throw new SignatureException("Invalid message signature");
+        }
+        // Logging
+        logDecode(logger, message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
+        return message;
     }
 }
