@@ -1,11 +1,12 @@
 package com.nis;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
-import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
+import java.security.SignatureException;
+import java.util.Arrays;
+import java.util.logging.Logger;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -34,6 +35,9 @@ public class AppTest
                             "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
                             ".,/;\"'\\{}[]-_=+?!@#$%^&*()`~<>|" +
                             "\n\t\b\f\r";
+    private final static Logger logger = Logger.getLogger(AppTest.class.getName());
+                            
+    //String TEST_STRING = "ABCDEFGHIJKLMNOP";
     
     /** 
      * Tests compression and decompression using PGPUtilities 
@@ -47,7 +51,7 @@ public class AppTest
         byte[] raw = TEST_STRING.getBytes();
         byte[] compressed = PGPUtilities.compress(raw);
         byte[] uncompressed = PGPUtilities.decompress(compressed);
-        assertTrue((new String(uncompressed)).equals(TEST_STRING));
+        assertTrue(Arrays.equals(raw, uncompressed));
     }
 
     /** 
@@ -69,11 +73,11 @@ public class AppTest
         byte[] raw = TEST_STRING.getBytes();
         byte[] encrypted = PGPUtilities.encryptWithRSA(raw, pair.getPrivate());
         byte[] decrypted = PGPUtilities.decryptWithRSA(encrypted, pair.getPublic());
-        assertTrue((new String(decrypted)).equals(TEST_STRING));
+        assertTrue(Arrays.equals(decrypted, raw));
 
         encrypted = PGPUtilities.encryptWithRSA(raw, pair.getPublic());
         decrypted = PGPUtilities.decryptWithRSA(encrypted, pair.getPrivate());
-        assertTrue((new String(decrypted)).equals(TEST_STRING));
+        assertTrue(Arrays.equals(decrypted, raw));
     }
 
     /** 
@@ -96,7 +100,7 @@ public class AppTest
         byte[] raw = TEST_STRING.getBytes();
         byte[] encrypted = PGPUtilities.encryptWithAES(raw, key, iv);
         byte[] decrypted = PGPUtilities.decryptWithAES(encrypted, key, iv);
-        assertTrue((new String(decrypted)).equals(TEST_STRING));
+        assertTrue(Arrays.equals(decrypted, raw));
     }
     
     /** 
@@ -137,7 +141,32 @@ public class AppTest
         int randomIndex = (int)(Math.random()*(TEST_STRING.length()+1));
         byte[] first = TEST_STRING.substring(0, randomIndex).getBytes();
         byte[] second = TEST_STRING.substring(randomIndex).getBytes();
-        assertTrue((new String(PGPUtilities.concatenate(first, second))).equals(TEST_STRING));
+        assertTrue(Arrays.equals(PGPUtilities.concatenate(first, second), TEST_STRING.getBytes()));
+    }
+
+    
+    /** 
+     * Tests PGP encode and decode pipelines
+     * 
+     * @throws NoSuchAlgorithmException
+     * @throws InvalidKeyException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws InvalidAlgorithmParameterException
+     * @throws SignatureException
+     * @throws IOException
+     */
+    @Test
+    public void testPGP() throws NoSuchAlgorithmException, InvalidKeyException, NoSuchPaddingException, 
+    IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException, SignatureException, 
+    IOException
+    {
+        KeyPair senderPair = PGPUtilities.generateRSAKeyPair();
+        KeyPair receiverPair = PGPUtilities.generateRSAKeyPair();
+        byte[] encodedMessage = PGPUtilities.encode(TEST_STRING.getBytes(), senderPair.getPrivate(), receiverPair.getPublic(), logger);
+        byte[] decodedMessage = PGPUtilities.decode(encodedMessage, receiverPair.getPrivate(), senderPair.getPublic(), logger);
+        assertTrue(Arrays.equals(TEST_STRING.getBytes(), decodedMessage));
     }
 
 }
