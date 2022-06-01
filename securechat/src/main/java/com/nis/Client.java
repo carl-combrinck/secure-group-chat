@@ -1,20 +1,31 @@
 package com.nis;
 
+import com.nis.shared.PGPUtilities;
+
 import java.net.*;
 import java.io.*;
+import java.security.KeyPair;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 
 public class Client {
     private final String hostname;
     private final int port;
+    private final KeyPair personalKeyPair;
+    private KeyStore keyRing;
 
-    public Client() {
+    public Client() throws NoSuchAlgorithmException {
         this.hostname = "localhost";
         this.port = 4444;
+        this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
-    public Client(String hostname, int port) {
+    public Client(String hostname, int port) throws NoSuchAlgorithmException {
         this.hostname = hostname;
         this.port = port;
+        this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
     private void connectToServer() {
@@ -34,7 +45,12 @@ public class Client {
 
     }
 
-    public static void main(String[] args) {
+    private void createKeyRing() throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
+        this.keyRing = KeyStore.getInstance("PKCS12");
+        this.keyRing.load(null,null);
+    }
+
+    public static void main(String[] args) throws NoSuchAlgorithmException {
         Client client;
 
         if (args.length == 0) {
