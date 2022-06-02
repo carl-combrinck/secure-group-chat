@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.logging.Logger;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
+import java.util.Base64;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -73,7 +74,7 @@ public class PGPUtilities{
      * 
      * @param bytes The message
      * @param privateKey The private key of the sender
-     * @return The signature
+     * @return The signature byte[] 
      * @throws InvalidKeyException
      * @throws NoSuchAlgorithmException
      * @throws NoSuchPaddingException
@@ -90,7 +91,7 @@ public class PGPUtilities{
      * 
      * @param bytes
      * @param key
-     * @return byte[]
+     * @return The encrypted byte[]
      * @throws NoSuchAlgorithmException
      * @throws NoSuchPaddingException
      * @throws InvalidKeyException
@@ -109,7 +110,7 @@ public class PGPUtilities{
      * 
      * @param bytes
      * @param key
-     * @return byte[]
+     * @return The decrypted byte[]
      * @throws NoSuchAlgorithmException
      * @throws NoSuchPaddingException
      * @throws InvalidKeyException
@@ -301,6 +302,26 @@ public class PGPUtilities{
     }
     
     /** 
+     * Base 64 encodes a byte array
+     * 
+     * @param bytes The byte[] to encode
+     * @return The encoded byte[]
+     */
+    public static byte[] r64Encode(byte[] bytes){
+        return Base64.getEncoder().encode(bytes);
+    }
+    
+    /** 
+     * Base 64 decodes a byte array
+     * 
+     * @param bytes The byte[] to decode
+     * @return The decoded byte[]
+     */
+    public static byte[] r64Decode(byte[] bytes){
+        return Base64.getDecoder().decode(bytes);
+    }
+    
+    /** 
      * Logs PGP encoding information
      * 
      * @param logger The logger
@@ -322,8 +343,8 @@ public class PGPUtilities{
         "ENCRYPTED MESSAGE:" + line + "%s" + line +
         "ENCRYPTED SESSION:" + line + "%s" + line +
         "PGP MESSAGE:" + line + "%s" + line;
-        logger.info(String.format(log, new String(raw), new String(sign), new String(zip), 
-            new String(sesh), new String(emsg), new String(esesh), new String(pgp)));
+        logger.info(String.format(log, new String(raw), new String(r64Encode(sign)), new String(r64Encode(zip)), 
+            new String(r64Encode(sesh)), new String(r64Encode(emsg)), new String(r64Encode(esesh)), new String(r64Encode(pgp))));
     }
     
     /** 
@@ -348,8 +369,8 @@ public class PGPUtilities{
         "COMPRESSED:" + line + "%s" + line +
         "SIGNATURE:" + line+ "%s" + line +
         "RAW MESSAGE:" + line + "%s" + line;
-        logger.info(String.format(log, new String(pgp), new String(esesh), new String(emsg), 
-        new String(sesh), new String(zip), new String(sign), new String(raw)));
+        logger.info(String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
+        new String(r64Encode(sesh)), new String(r64Encode(zip)), new String(r64Encode(sign)), new String(raw)));
     }
 
     /** 
@@ -383,9 +404,11 @@ public class PGPUtilities{
         // Encrypt session data with receiver public key
         byte[] encryptedSessionData = encryptWithRSA(sessionData, receiverPublicKey);
         byte[] encodedMessage = concatenate(encryptedSessionData, encryptedMessage);
+        // Base/Radix 64 encode message
+        byte[] encoded64Message = r64Encode(encodedMessage);
         // Logging
         logEncode(logger, message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
-        return encodedMessage;
+        return encoded64Message;
     }
 
     /** 
@@ -405,9 +428,11 @@ public class PGPUtilities{
      * @throws IOException
      * @throws SignatureException
      */
-    public static byte[] decode(byte[] encodedMessage, Key receiverPrivateKey, Key senderPublicKey, Logger logger) throws InvalidKeyException, 
+    public static byte[] decode(byte[] encoded64Message, Key receiverPrivateKey, Key senderPublicKey, Logger logger) throws InvalidKeyException, 
     NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException, 
     IOException, SignatureException{
+        // Decode base 64 message
+        byte[] encodedMessage = r64Decode(encoded64Message);
         // Extract encrypted session and message data
         byte[] encryptedSessionData = slice(encodedMessage, 0, SESSION_DATA_BYTES);
         byte[] encryptedMessage = slice(encodedMessage, SESSION_DATA_BYTES, encodedMessage.length);
