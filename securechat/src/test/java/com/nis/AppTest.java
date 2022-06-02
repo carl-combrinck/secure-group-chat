@@ -36,8 +36,6 @@ public class AppTest
                             ".,/;\"'\\{}[]-_=+?!@#$%^&*()`~<>|" +
                             "\n\t\b\f\r";
     private final static Logger logger = Logger.getLogger(AppTest.class.getName());
-                            
-    //String TEST_STRING = "ABCDEFGHIJKLMNOP";
     
     /** 
      * Tests compression and decompression using PGPUtilities 
@@ -144,7 +142,17 @@ public class AppTest
         assertTrue(Arrays.equals(PGPUtilities.concatenate(first, second), TEST_STRING.getBytes()));
     }
 
-    
+    /**
+     * Tests base 64 encoding and decoding
+     */
+    @Test
+    public void testBase64() 
+    {
+        byte[] encoded = PGPUtilities.r64Encode(TEST_STRING.getBytes());
+        byte[] decoded = PGPUtilities.r64Decode(encoded);
+        assertTrue(Arrays.equals(decoded, TEST_STRING.getBytes()));
+    }
+
     /** 
      * Tests PGP encode and decode pipelines
      * 
