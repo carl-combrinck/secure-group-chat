@@ -28,9 +28,13 @@ To remove build-related artefacts and files, run:
 
 ## Usage
 
-One the project is built, run the following command to execute:
+Once the project is built, run the following command to run the server:
 
-1. ```java -cp target/securechat-1.0-SNAPSHOT.jar com.nis.App```
+1. ```java -cp target/securechat-1.0-SNAPSHOT.jar com.nis.Server 1234```
+
+In 3 separate terminals, execute the following command to run clients:
+
+2. ```java -cp target/securechat-1.0-SNAPSHOT.jar com.nis.Client localhost 1234```
 
 ## Authors
 
