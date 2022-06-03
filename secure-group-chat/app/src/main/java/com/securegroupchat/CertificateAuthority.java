@@ -1,11 +1,11 @@
-package com.nis;
+package com.securegroupchat;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.*;
 
-import com.nis.shared.PGPUtilities;
+import com.securegroupchat.PGPUtilities;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;

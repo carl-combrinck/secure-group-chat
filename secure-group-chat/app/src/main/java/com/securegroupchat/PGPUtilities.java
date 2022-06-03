@@ -1,4 +1,4 @@
-package com.nis.shared;
+package com.securegroupchat;
 
 import java.util.Arrays;
 import java.util.logging.Logger;

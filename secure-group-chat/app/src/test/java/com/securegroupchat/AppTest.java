@@ -1,6 +1,7 @@
-package com.nis;
+package com.securegroupchat;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
@@ -18,9 +19,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 
-import org.junit.Test;
-
-import com.nis.shared.PGPUtilities;
+import com.securegroupchat.PGPUtilities;
 
 /**
  * Unit tests for Secure Group Chat.
@@ -178,3 +177,4 @@ public class AppTest
     }
 
 }
+

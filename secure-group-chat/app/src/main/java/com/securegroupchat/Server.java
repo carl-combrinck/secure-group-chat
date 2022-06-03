@@ -1,4 +1,4 @@
-package com.nis;
+package com.securegroupchat;
 import java.net.*;
 import java.io.*;
 
