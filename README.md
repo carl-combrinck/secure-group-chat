@@ -10,32 +10,57 @@ A secure group chat application using a PGP-based cryptosystem.
 
 The following dependencies are required (with recommended versions):
 
-- Java 18 
-- Maven 3.8.5
+- Java 15
+
+Note: Gradle is used for build automation but need not be installed.
 
 ### Installation
 
 Follow these instructions to build the project:
 
-1. ```cd securechat```
+#### Windows
 
-1. ```mvn package```
+1. ```cd secure-group-chat```
+
+1. ```gradlew build``` 
+
+#### Unix
+
+1. ```cd secure-group-chat```
+
+1. ```./gradlew build``` 
+
+## Usage
+
+Once the project is built, run the following commands to:
+
+1. Run the server
+1. Run 3 separate clients
+
+#### Windows
+
+1. ```gradlew run_server```
+1. ```gradlew run_client``` (in 3 separate terminals)
+
+#### Unix
+
+1. ```./gradlew run_server```
+1. ```./gradlew run_client``` (in 3 separate terminals)
 
 ### Clean
 
 To remove build-related artefacts and files, run:
-1. ```mvn clean```
 
-## Usage
+#### Windows
 
-Once the project is built, run the following command to run the server:
+1. ```gradlew clean```
 
-1. ```java -cp target/securechat-1.0-SNAPSHOT.jar com.nis.Server 1234```
+#### Unix
 
-In 3 separate terminals, execute the following command to run clients:
-
-2. ```java -cp target/securechat-1.0-SNAPSHOT.jar com.nis.Client localhost 1234```
+1. ```./gradlew clean```
 
 ## Authors
 
-
+- Jaron Cohen
+- Bailey Green
+- Carl Combrinck
