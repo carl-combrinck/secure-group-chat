@@ -31,8 +31,12 @@ public class Client {
     private void connectToServer() {
         try {
             Socket socket = new Socket(hostname, port);
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+
+            //Send client's certificate to the server
+            CertificateMessage certificateMessage = new CertificateMessage(clientName,"server", (X509Certificate) keyRing.getCertificate(clientName));
+            out.writeObject(certificateMessage);
 
             new IncomingHandler(socket, in).start();
             new OutgoingHandler(socket, out).start();
@@ -40,6 +44,8 @@ public class Client {
         } catch (UnknownHostException e) {
             System.exit(1);
         } catch (IOException e) {
+            System.exit(1);
+        } catch (KeyStoreException e) {
             System.exit(1);
         }
     }
@@ -98,35 +104,56 @@ public class Client {
         return this.clientName;
     }
 
-    private static class IncomingHandler extends Thread {
+    private class IncomingHandler extends Thread {
         private Socket socket;
-        private BufferedReader in;
+        private ObjectInputStream in;
 
-        public IncomingHandler(Socket socket, BufferedReader in) {
+        public IncomingHandler(Socket socket, ObjectInputStream in) {
             this.socket = socket;
             this.in = in;
         }
 
         public void run() {
-
             try {
-                String receivedLine;
-                while ((receivedLine = in.readLine()) != null) {
-                    System.out.println("Received: " + receivedLine);
-                    System.out.print("Enter message: ");
+//                String receivedLine;
+//                while ((receivedLine = in.readLine()) != null) {
+//                    System.out.println("Received: " + receivedLine);
+//                    System.out.print("Enter message: ");
+//                }
+                Object message = in.readObject();
+
+                if (message instanceof CommandMessage){
+
+                    CommandMessage commandMessage = (CommandMessage) message;
+                    System.out.println("Received command:");
+                    System.out.println(commandMessage.getCommand());
+
+                } else if (message instanceof CertificateMessage) {
+
+                    CertificateMessage certificateMessage = (CertificateMessage) message;
+                    System.out.println("Received certificate:");
+                    System.out.println(certificateMessage.getCertificate());
+
+                }else if (message instanceof  PGPMessage){
+
+                    PGPMessage pgpMessage = (PGPMessage) message;
+                    System.out.println("Received PGP message:");
+                    System.out.println("Decoding...");
+
                 }
-            } catch (IOException e) {
+
+            } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
                 System.exit(1);
             }
         }
     }
 
-    private static class OutgoingHandler extends Thread {
+    private class OutgoingHandler extends Thread {
         private Socket socket;
-        private PrintWriter out;
+        private ObjectOutputStream out;
 
-        public OutgoingHandler(Socket socket, PrintWriter out) {
+        public OutgoingHandler(Socket socket, ObjectOutputStream out) {
             this.socket = socket;
             this.out = out;
         }
@@ -138,7 +165,11 @@ public class Client {
                 do{
                     System.out.println("Enter message: ");
                     userInput = stdIn.readLine();
-                    out.println(userInput);
+
+                    //Just testing with command messages for now
+                    CommandMessage message = new CommandMessage(Client.this.clientName, null, userInput);
+                    out.writeObject(message);
+
                 }while(userInput != "quit");
 
             } catch (IOException e) {
