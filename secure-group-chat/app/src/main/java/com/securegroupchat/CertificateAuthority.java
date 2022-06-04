@@ -15,9 +15,9 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.asn1.x500.X500Name;
 
+import java.security.cert.*;
+
 import java.math.BigInteger;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 
 import java.util.*;
 
@@ -121,7 +121,7 @@ public class CertificateAuthority {
      * @return X509Certificate
      * @throws Exception
      */
-    public X509Certificate generateSignedCertificate(String subject, PublicKey publicKey ) throws Exception {
+    public X509Certificate generateSignedCertificate(String subject, PublicKey publicKey) throws Exception {
         return generateCertificate(subject,publicKey,CAKeyPair.getPrivate());
     }
 
