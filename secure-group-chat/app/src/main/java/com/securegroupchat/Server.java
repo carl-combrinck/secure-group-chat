@@ -2,10 +2,13 @@ package com.securegroupchat;
 
 import java.net.*;
 import java.io.*;
+import java.util.*;
 
 public class Server {
     private final int port;
     private boolean listening = true;
+
+    private final Set<ClientHandler> clientHandlers = new HashSet<>();
 
     public Server() {
         this.port = 4444;
@@ -38,7 +41,10 @@ public class Server {
             while (listening) {
                 System.out.println("Server Listening.");
                 Socket socket = serverSocket.accept(); // listen for incoming client connections
-                new ClientHandler(socket).start();
+
+                ClientHandler clientHandler = new ClientHandler(socket);
+                clientHandlers.add(clientHandler);
+                clientHandler.start();
             }
 
         } catch (IOException e) {
@@ -58,18 +64,34 @@ public class Server {
         }
 
         public void run() {
-            try (PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                    BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))) {
 
-                String inputLine, outputLine;
-                out.println("Connection to server successful.");
+            try (ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
+                    ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
+
+                out.writeObject(new CommandMessage("server", null, "Connection to server successful."));
 
                 while (connectionActive) {
                     try {
-                        inputLine = in.readLine();
-                        outputLine = "Echo back => " + inputLine;
-                        out.println(outputLine);
-                    } catch (IOException e) {
+                        Object message = in.readObject();
+
+                        if (message instanceof CommandMessage){
+
+                            CommandMessage commandMessage = (CommandMessage) message;
+                            System.out.println("Received command:");
+                            System.out.println(commandMessage.getCommand());
+
+                        } else if (message instanceof CertificateMessage) {
+
+                            CertificateMessage certificateMessage = (CertificateMessage) message;
+                            System.out.println("Received certificate:");
+                            System.out.println(certificateMessage.getCertificate());
+
+                        }else if (message instanceof  PGPMessage){
+
+                            PGPMessage pgpMessage = (PGPMessage) message;
+
+                        }
+                    } catch (IOException | ClassNotFoundException e) {
                         e.printStackTrace();
                     }
                 }
@@ -79,6 +101,8 @@ public class Server {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+
+
         }
 
     }
