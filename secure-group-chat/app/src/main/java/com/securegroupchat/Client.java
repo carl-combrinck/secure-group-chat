@@ -1,6 +1,6 @@
-package com.nis;
+package com.securegroupchat;
 
-import com.nis.shared.PGPUtilities;
+import com.securegroupchat.PGPUtilities;
 
 import java.net.*;
 import java.io.*;
