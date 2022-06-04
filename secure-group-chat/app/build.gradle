@@ -25,6 +25,7 @@ dependencies {
     implementation group: 'org.bouncycastle', name: 'bcprov-ext-jdk15on', version: '1.70'
     implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: '1.70'
     implementation group: 'org.bouncycastle', name: 'bcpg-jdk15on', version: '1.70'
+    implementation files('bouncy_castle/bcprov-ext-jdk18on-171.jar')
 }
 
 tasks.named('test') {
@@ -44,4 +45,10 @@ task run_client(type:JavaExec) {
     mainClass = "com.securegroupchat.Client"
     classpath = sourceSets.main.runtimeClasspath
     args 'localhost', '1234'
+}
+
+task run_ca(type:JavaExec) {
+    standardInput = System.in
+    mainClass = "com.securegroupchat.CertificateAuthority"
+    classpath = sourceSets.main.runtimeClasspath
 }
