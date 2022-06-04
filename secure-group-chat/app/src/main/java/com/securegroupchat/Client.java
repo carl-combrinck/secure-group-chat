@@ -4,17 +4,17 @@ import com.securegroupchat.PGPUtilities;
 
 import java.net.*;
 import java.io.*;
-import java.security.KeyPair;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+
 
 public class Client {
     private final String hostname;
     private final int port;
     private final KeyPair personalKeyPair;
     private KeyStore keyRing;
+    private String clientName;
 
     public Client() throws NoSuchAlgorithmException {
         this.hostname = "localhost";
@@ -42,7 +42,6 @@ public class Client {
         } catch (IOException e) {
             System.exit(1);
         }
-
     }
 
     private void createKeyRing() throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
@@ -55,17 +54,48 @@ public class Client {
 
         if (args.length == 0) {
             client = new Client();
+            client.setup();
             client.connectToServer();
         } else if (args.length == 2) {
             String hostname = args[0];
             int port = Integer.parseInt(args[1]);
             client = new Client(hostname, port);
+            client.setup();
             client.connectToServer();
         } else {
             System.err.println("Usage: java Client <host name> <port number>");
             System.exit(1);
         }
+    }
 
+    private void setup(){
+        String clientName = "";
+        BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
+        try {
+            System.out.println("Welcome to the Secure Group Chat Application.");
+            System.out.print("Please enter your chat name: ");
+            clientName = stdin.readLine();
+            setClientName(clientName);
+            System.out.println("Welcome, "+ clientName);
+
+            //Get signed certificate
+            X509Certificate certificate = new CertificateAuthority().generateSignedCertificate(clientName, personalKeyPair.getPublic());
+            System.out.println(certificate);
+
+            createKeyRing();
+            keyRing.setCertificateEntry(clientName,certificate); //Store client's certificate in in-memory KeyStore
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void setClientName(String clientName){
+        this.clientName = clientName;
+    }
+
+    private String getClientName(String clientName){
+        return this.clientName;
     }
 
     private static class IncomingHandler extends Thread {
