@@ -13,8 +13,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.util.logging.Logger;
+import java.util.Enumeration;
 
 public class Client {
+
+    private final static Logger logger = Logger.getLogger(Client.class.getName());
     private final String hostname;
     private final int port;
     private final KeyPair personalKeyPair;
@@ -49,7 +56,6 @@ public class Client {
             AtomicBoolean ready = new AtomicBoolean(false);
 
             new IncomingHandler(socket, in, out, ready).start();
-            new OutgoingHandler(socket, in, out, ready).start();
 
         } catch (UnknownHostException e) {
             System.exit(1);
@@ -147,16 +153,19 @@ public class Client {
                         if(commandMessage.getCommand().equals("CONN_SUCC")){
                             System.out.println("> Connection to server successful.");
                             //Send client's certificate to the server
-                            CertificateMessage certificateMessage = new CertificateMessage(clientName,"<ALL>", (X509Certificate) keyRing.getCertificate(clientName));
+                            CertificateMessage certificateMessage = new CertificateMessage(clientName,"<ALL>", (X509Certificate) keyRing.getCertificate(clientName), false);
                             writeToStream(certificateMessage);
-                            System.out.println("Sent certificate to server.");
+                            System.out.println("Sent certificate to server for broadcast.");
                         }
                         // End Connection Message
                         else if(commandMessage.getCommand().equals("CONN_END")){
                             System.out.println("> Connection to server closed.");
                             break;
+                        }else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
+                            System.out.println("> Certificate has been broadcast to other clients by server.");
+                            System.out.println("> You may begin sending messages.");
+                            new OutgoingHandler(socket, in, out, ready).start(); //Client ready to send messages
                         }
-
 
                     } else if (message instanceof CertificateMessage) {
 
@@ -165,25 +174,45 @@ public class Client {
                         // Handle CertificateMessages that are not from me
                         if(!certificateMessage.getSender().equals(Client.this.getClientName())){
                             X500Name x500name = new JcaX509CertificateHolder(certificateMessage.getCertificate()).getSubject();
-                            //TODO Change to CN
-                            System.out.println("Received certificate from " + x500name.toString());
+                            String CNalias = x500name.toString().substring(3);
+
+                            if(certificateMessage.getReply()){
+                                System.out.println("Received certificate reply from client: " + CNalias);
+                            }else{
+                                System.out.println("Received certificate from client: " + CNalias);
+                            }
+
                             try {
                                 CertificateAuthority ca = new CertificateAuthority();
                                 certificateMessage.getCertificate().verify(ca.getPublicKey()); // Verify certificate
-                                // TODO Change name to be from Certificate
-                                Client.this.addKeyToRing(certificateMessage.getSender(), certificateMessage.getCertificate());
-                                System.out.println("Certificate Valid");
-                                // TODO Return my certificate
+                                Client.this.addKeyToRing(CNalias, certificateMessage.getCertificate());
+                                System.out.println("Certificate verified as valid.");
+                                if(!certificateMessage.getReply()) {
+                                    System.out.println("Replying with own certificate.");
+                                    // Send client's certificate back as a reply
+                                    CertificateMessage reply = new CertificateMessage(clientName, CNalias, (X509Certificate) keyRing.getCertificate(clientName), true);
+                                    writeToStream(reply);
+                                }
+
                             } catch (Exception e) {
-                                System.out.println("Could not verify cerificate!");
+                                System.out.println("Could not verify certificate!");
                             }
                         }
 
                     }else if (message instanceof  PGPMessage){
-
                         PGPMessage pgpMessage = (PGPMessage) message;
-                        System.out.println("Received PGP message:");
-                        System.out.println("Decoding...");
+                        String sender = pgpMessage.getSender();
+                        System.out.println("Received PGP message from: " + sender);
+                        System.out.println("Decoding message...");
+
+                        try {
+                            byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(),logger);
+                            String plaintext = new String(decodedPGPdata);
+                            System.out.println(sender+": "+plaintext);
+                        }catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
+                                NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
+                            System.out.println("Could not decode message!");
+                        }
 
                     }
 
@@ -216,8 +245,6 @@ public class Client {
 
         public void run() {
 
-
-
             try (BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in))) {
                 String userInput;
                 do{
@@ -229,9 +256,20 @@ public class Client {
                         writeToStream(quit);
                     }
                     else{
-                        //Just testing with command messages for now
-                        CommandMessage message = new CommandMessage(Client.this.clientName, "server", userInput);
-                        writeToStream(message);
+
+                        Enumeration<String> enumeration = keyRing.aliases();
+
+                        while(enumeration.hasMoreElements()) {
+                            String alias = enumeration.nextElement();
+                            if(!alias.equals(clientName)){
+                                X509Certificate recipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
+                                byte[] encodedPGPdata = PGPUtilities.encode(userInput.getBytes(),personalKeyPair.getPrivate(),recipientCertificate.getPublicKey(),logger);
+                                PGPMessage pgpMessage = new PGPMessage(clientName,alias,encodedPGPdata);
+                                System.out.println("Sending message to: "+alias);
+                                writeToStream(pgpMessage);
+                            }
+                        }
+
                     }
 
                 }while(!userInput.equals("quit"));
@@ -239,6 +277,20 @@ public class Client {
             } catch (IOException e) {
                 e.printStackTrace();
                 System.exit(1);
+            } catch (InvalidAlgorithmParameterException e) {
+                throw new RuntimeException(e);
+            } catch (NoSuchPaddingException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalBlockSizeException e) {
+                throw new RuntimeException(e);
+            } catch (KeyStoreException e) {
+                throw new RuntimeException(e);
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
+            } catch (BadPaddingException e) {
+                throw new RuntimeException(e);
+            } catch (InvalidKeyException e) {
+                throw new RuntimeException(e);
             }
         }
     }
