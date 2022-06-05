@@ -63,6 +63,10 @@ public class CertificateAuthority {
         this.CAKeyPair = new KeyPair(CAPublic,CAPrivate);
     }
 
+    public PublicKey getPublicKey(){
+        return this.CAKeyPair.getPublic();
+    }
+
     /**
      * Creates new KeyStore, generates CA KeyPair and stores self-signed root X.509 certificate in new KeyStore on disk.
      * @throws Exception
