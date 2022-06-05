@@ -4,6 +4,9 @@ import java.net.*;
 import java.io.*;
 import java.util.*;
 
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
+
 public class Server {
     private final int port;
     private boolean listening = true;
@@ -37,12 +40,41 @@ public class Server {
         synchronized(this.clientHandlers){
             for(ClientHandler client : this.clientHandlers){
                 try {
-                    //TODO Add Receiver (need to have alias stored with handler)
-                    CertificateMessage certificateMessage = new CertificateMessage(originalMessage.getSender(), "", originalMessage.getCertificate());
+                    CertificateMessage certificateMessage = new CertificateMessage(originalMessage.getSender(), client.getClientName(), originalMessage.getCertificate(), false);
                     client.writeToStream(certificateMessage);
-                    System.out.println(String.format("%-15s%-5s%-10s%-10s", certificateMessage.getReceiver(), "OUT", "<CERT>", ""));
+                    System.out.println(String.format("%-15s%-5s%-10s%-10s", certificateMessage.getReceiver(), "OUT", "<CERT>", client.getClientName()));
                 } catch (IOException e) {
-                    System.out.println("Error forwarding certificate to client.");
+                    System.out.println("Error broadcasting certificate to client.");
+                }
+            }
+        }
+    }
+
+    // Sends certificate to requested recipient on behalf of client
+    public void forwardCertificate(CertificateMessage originalMessage){
+        synchronized(this.clientHandlers){
+            for(ClientHandler client : this.clientHandlers){
+                if(client.clientName.equals(originalMessage.getReceiver())){
+                    try {
+                        client.writeToStream(originalMessage);
+                    }catch(IOException e){
+                        System.out.println("Error forwarding certificate to client.");
+                    }
+                }
+            }
+        }
+    }
+
+    // Sends PGP message to requested recipient on behalf of client
+    public void forwardPGPMessage(PGPMessage originalMessage){
+        synchronized(this.clientHandlers){
+            for(ClientHandler client : this.clientHandlers){
+                if(client.clientName.equals(originalMessage.getReceiver())){
+                    try {
+                        client.writeToStream(originalMessage);
+                    }catch(IOException e){
+                        System.out.println("Error forwarding PGP message to client.");
+                    }
                 }
             }
         }
@@ -89,6 +121,7 @@ public class Server {
         private Socket clientSocket;
         private ObjectOutputStream out;
         private ObjectInputStream in;
+        private String clientName = null;
         private boolean connectionActive = true;
 
         public ClientHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
@@ -97,6 +130,14 @@ public class Server {
             this.out = out;
             this.in = in;
             System.out.println("ClientHandler created.");
+        }
+
+        private void setClientName(String clientName){
+            this.clientName = clientName;
+        }
+
+        private String getClientName(){
+            return clientName;
         }
 
         // Concurrent writing to output stream
@@ -137,12 +178,28 @@ public class Server {
                         } else if (message instanceof CertificateMessage) {
 
                             CertificateMessage certificateMessage = (CertificateMessage) message;
+
+                            // If client has sent certificate for broadcast to other clients - occurs when client initially joins group chat
                             if(certificateMessage.getReceiver().equals("<ALL>")){
+                                try {
+                                    X500Name x500name = new JcaX509CertificateHolder(certificateMessage.getCertificate()).getSubject();
+                                    String CNalias = x500name.toString().substring(3);
+                                    setClientName(CNalias);
+                                }catch (Exception e){
+                                    e.printStackTrace();
+                                }
+
                                 Server.this.broadcastCertificate(certificateMessage);
                                 System.out.println(String.format("%-15s%-10s%-10s", certificateMessage.getSender(), "IN", "<CERT>", certificateMessage.getReceiver()));
-                            }
+
+                                //Notify client that certificate has been broadcast - client can then begin sending messages
+                                CommandMessage broadcastReply = new CommandMessage("server", getClientName(),"CERT_BROADCAST");
+                                writeToStream(broadcastReply);
+
+                            } // Otherwise received CertificateMessage for forwarding purposes
                             else{
-                                // TODO Forward certificate onto correct client
+                                // Forward certificate for client
+                                Server.this.forwardCertificate(certificateMessage);
                             }
                             
                             //System.out.println(certificateMessage.getCertificate());
@@ -150,7 +207,8 @@ public class Server {
                         }else if (message instanceof PGPMessage){
 
                             PGPMessage pgpMessage = (PGPMessage) message;
-
+                            //Forward message for client
+                            Server.this.forwardPGPMessage(pgpMessage);
                         }
                     } catch (IOException | ClassNotFoundException e) {
                         connectionActive = false;
