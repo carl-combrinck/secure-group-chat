@@ -5,8 +5,13 @@ import com.securegroupchat.PGPUtilities;
 import java.net.*;
 import java.io.*;
 import java.security.*;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 
 
 public class Client {
@@ -28,24 +33,27 @@ public class Client {
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    public void addKeyToRing(String name, X509Certificate cert){
+        try {
+            keyRing.setCertificateEntry(name, cert);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private void connectToServer() {
         try {
             Socket socket = new Socket(hostname, port);
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+            AtomicBoolean ready = new AtomicBoolean(false);
 
-            //Send client's certificate to the server
-            CertificateMessage certificateMessage = new CertificateMessage(clientName,"server", (X509Certificate) keyRing.getCertificate(clientName));
-            out.writeObject(certificateMessage);
-
-            new IncomingHandler(socket, in).start();
-            new OutgoingHandler(socket, out).start();
+            new IncomingHandler(socket, in, out, ready).start();
+            new OutgoingHandler(socket, in, out, ready).start();
 
         } catch (UnknownHostException e) {
             System.exit(1);
         } catch (IOException e) {
-            System.exit(1);
-        } catch (KeyStoreException e) {
             System.exit(1);
         }
     }
@@ -86,10 +94,11 @@ public class Client {
 
             //Get signed certificate
             X509Certificate certificate = new CertificateAuthority().generateSignedCertificate(clientName, personalKeyPair.getPublic());
-            System.out.println(certificate);
+            System.out.println("Certificate generated.");
+            //System.out.println(certificate);
 
             createKeyRing();
-            keyRing.setCertificateEntry(clientName,certificate); //Store client's certificate in in-memory KeyStore
+            addKeyToRing(clientName,certificate); //Store client's certificate in in-memory KeyStore
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -100,51 +109,88 @@ public class Client {
         this.clientName = clientName;
     }
 
-    private String getClientName(String clientName){
+    private String getClientName(){
         return this.clientName;
     }
 
     private class IncomingHandler extends Thread {
         private Socket socket;
         private ObjectInputStream in;
+        private ObjectOutputStream out;
+        private AtomicBoolean ready;
 
-        public IncomingHandler(Socket socket, ObjectInputStream in) {
+        public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
             this.socket = socket;
             this.in = in;
+            this.out = out;
+            this.ready = ready;
+        }
+
+        // For concurrent writing to output stream
+        private void writeToStream(Object obj) throws IOException{
+            synchronized (this.out) {
+                this.out.writeObject(obj);
+            }
         }
 
         public void run() {
-            try {
-//                String receivedLine;
-//                while ((receivedLine = in.readLine()) != null) {
-//                    System.out.println("Received: " + receivedLine);
-//                    System.out.print("Enter message: ");
-//                }
-                Object message = in.readObject();
+            while(true){
+                try {
 
-                if (message instanceof CommandMessage){
+                    Object message = in.readObject();
 
-                    CommandMessage commandMessage = (CommandMessage) message;
-                    System.out.println("Received command:");
-                    System.out.println(commandMessage.getCommand());
+                    if (message instanceof CommandMessage){
 
-                } else if (message instanceof CertificateMessage) {
+                        CommandMessage commandMessage = (CommandMessage) message;
 
-                    CertificateMessage certificateMessage = (CertificateMessage) message;
-                    System.out.println("Received certificate:");
-                    System.out.println(certificateMessage.getCertificate());
+                        // Successful Connection Message
+                        if(commandMessage.getCommand().equals("CONN_SUCC")){
+                            System.out.println("> Connection to server successful.");
+                            //Send client's certificate to the server
+                            CertificateMessage certificateMessage = new CertificateMessage(clientName,"<ALL>", (X509Certificate) keyRing.getCertificate(clientName));
+                            writeToStream(certificateMessage);
+                            System.out.println("Sent certificate to server.");
+                        }
+                        // End Connection Message
+                        else if(commandMessage.getCommand().equals("CONN_END")){
+                            System.out.println("> Connection to server closed.");
+                            break;
+                        }
 
-                }else if (message instanceof  PGPMessage){
 
-                    PGPMessage pgpMessage = (PGPMessage) message;
-                    System.out.println("Received PGP message:");
-                    System.out.println("Decoding...");
+                    } else if (message instanceof CertificateMessage) {
 
+                        CertificateMessage certificateMessage = (CertificateMessage) message;
+
+                        // Handle CertificateMessages that are not from me
+                        if(!certificateMessage.getSender().equals(Client.this.getClientName())){
+                            X500Name x500name = new JcaX509CertificateHolder(certificateMessage.getCertificate()).getSubject();
+                            //TODO Change to CN
+                            System.out.println("Received certificate from " + x500name.toString());
+                            try {
+                                CertificateAuthority ca = new CertificateAuthority();
+                                certificateMessage.getCertificate().verify(ca.getPublicKey()); // Verify certificate
+                                // TODO Change name to be from Certificate
+                                Client.this.addKeyToRing(certificateMessage.getSender(), certificateMessage.getCertificate());
+                                System.out.println("Certificate Valid");
+                                // TODO Return my certificate
+                            } catch (Exception e) {
+                                System.out.println("Could not verify cerificate!");
+                            }
+                        }
+
+                    }else if (message instanceof  PGPMessage){
+
+                        PGPMessage pgpMessage = (PGPMessage) message;
+                        System.out.println("Received PGP message:");
+                        System.out.println("Decoding...");
+
+                    }
+
+                } catch (IOException | ClassNotFoundException | KeyStoreException | CertificateEncodingException e) {
+                    e.printStackTrace();
+                    System.exit(1);
                 }
-
-            } catch (IOException | ClassNotFoundException e) {
-                e.printStackTrace();
-                System.exit(1);
             }
         }
     }
@@ -152,13 +198,25 @@ public class Client {
     private class OutgoingHandler extends Thread {
         private Socket socket;
         private ObjectOutputStream out;
+        private ObjectInputStream in;
+        private AtomicBoolean ready;
 
-        public OutgoingHandler(Socket socket, ObjectOutputStream out) {
+        public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
             this.socket = socket;
+            this.in = in;
             this.out = out;
+            this.ready = ready;
         }
 
+        private void writeToStream(Object obj) throws IOException{
+            synchronized (this.out) {
+                this.out.writeObject(obj);
+            }
+        } 
+
         public void run() {
+
+
 
             try (BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in))) {
                 String userInput;
@@ -166,12 +224,18 @@ public class Client {
                     System.out.println("Enter message: ");
                     userInput = stdIn.readLine();
 
-                    //Just testing with command messages for now
-                    CommandMessage message = new CommandMessage(Client.this.clientName, null, userInput);
-                    out.writeObject(message);
+                    if(userInput.equals("quit")){
+                        CommandMessage quit = new CommandMessage(Client.this.clientName, "server", "QUIT");
+                        writeToStream(quit);
+                    }
+                    else{
+                        //Just testing with command messages for now
+                        CommandMessage message = new CommandMessage(Client.this.clientName, "server", userInput);
+                        writeToStream(message);
+                    }
 
-                }while(userInput != "quit");
-
+                }while(!userInput.equals("quit"));
+                
             } catch (IOException e) {
                 e.printStackTrace();
                 System.exit(1);

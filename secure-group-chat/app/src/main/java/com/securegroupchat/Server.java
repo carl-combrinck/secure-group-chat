@@ -18,6 +18,36 @@ public class Server {
         this.port = port;
     }
 
+    // Thread-safe adding of client
+    public void addClientHandler(ClientHandler client){
+        synchronized(this.clientHandlers){
+            this.clientHandlers.add(client);
+        }
+    }
+
+    // Thread-safe removing of client
+    public void removeClientHandler(ClientHandler client){
+        synchronized(this.clientHandlers){
+            this.clientHandlers.remove(client);
+        }
+    }
+
+    // Broadcasts certificates to all connected clients
+    public void broadcastCertificate(CertificateMessage originalMessage){
+        synchronized(this.clientHandlers){
+            for(ClientHandler client : this.clientHandlers){
+                try {
+                    //TODO Add Receiver (need to have alias stored with handler)
+                    CertificateMessage certificateMessage = new CertificateMessage(originalMessage.getSender(), "", originalMessage.getCertificate());
+                    client.writeToStream(certificateMessage);
+                    System.out.println(String.format("%-15s%-5s%-10s%-10s", certificateMessage.getReceiver(), "OUT", "<CERT>", ""));
+                } catch (IOException e) {
+                    System.out.println("Error forwarding certificate to client.");
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) {
 
         Server server;
@@ -42,8 +72,10 @@ public class Server {
                 System.out.println("Server Listening.");
                 Socket socket = serverSocket.accept(); // listen for incoming client connections
 
-                ClientHandler clientHandler = new ClientHandler(socket);
-                clientHandlers.add(clientHandler);
+                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+                ClientHandler clientHandler = new ClientHandler(socket, in, out);
+                addClientHandler(clientHandler);
                 clientHandler.start();
             }
 
@@ -55,20 +87,30 @@ public class Server {
 
     private class ClientHandler extends Thread {
         private Socket clientSocket;
+        private ObjectOutputStream out;
+        private ObjectInputStream in;
         private boolean connectionActive = true;
 
-        public ClientHandler(Socket socket) {
+        public ClientHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             super();
             this.clientSocket = socket;
+            this.out = out;
+            this.in = in;
             System.out.println("ClientHandler created.");
+        }
+
+        // Concurrent writing to output stream
+        public void writeToStream(Object obj) throws IOException{
+            synchronized(this.out){
+                out.writeObject(obj);
+            }
         }
 
         public void run() {
 
-            try (ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
-                    ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
+            try {
 
-                out.writeObject(new CommandMessage("server", null, "Connection to server successful."));
+                writeToStream(new CommandMessage("server", null, "CONN_SUCC"));
 
                 while (connectionActive) {
                     try {
@@ -77,22 +119,43 @@ public class Server {
                         if (message instanceof CommandMessage){
 
                             CommandMessage commandMessage = (CommandMessage) message;
-                            System.out.println("Received command:");
-                            System.out.println(commandMessage.getCommand());
+
+                            // Quit Command
+                            if(commandMessage.getCommand().equals("QUIT")){
+                                System.out.println(String.format("%-15s%-5s%-10s%-10s", commandMessage.getSender(), "IN", "<CMD>", "QUIT"));
+                                CommandMessage done = new CommandMessage("server", commandMessage.getSender(), "CONN_END");
+                                writeToStream(done);
+                                System.out.println(String.format("%-15s%-5s%-10s%-10s", commandMessage.getSender(), "OUT", "<CMD>", "DONE"));
+                                connectionActive = false;
+                                Server.this.removeClientHandler(this);
+                            }
+                            else{
+                                // TODO Remove, just for testing
+                                System.out.println(String.format("%-15s%-10s%-10s", commandMessage.getSender(), "<U_CMD>", commandMessage.getCommand()));
+                            }
 
                         } else if (message instanceof CertificateMessage) {
 
                             CertificateMessage certificateMessage = (CertificateMessage) message;
-                            System.out.println("Received certificate:");
-                            System.out.println(certificateMessage.getCertificate());
+                            if(certificateMessage.getReceiver().equals("<ALL>")){
+                                Server.this.broadcastCertificate(certificateMessage);
+                                System.out.println(String.format("%-15s%-10s%-10s", certificateMessage.getSender(), "IN", "<CERT>", certificateMessage.getReceiver()));
+                            }
+                            else{
+                                // TODO Forward certificate onto correct client
+                            }
+                            
+                            //System.out.println(certificateMessage.getCertificate());
 
-                        }else if (message instanceof  PGPMessage){
+                        }else if (message instanceof PGPMessage){
 
                             PGPMessage pgpMessage = (PGPMessage) message;
 
                         }
                     } catch (IOException | ClassNotFoundException e) {
-                        e.printStackTrace();
+                        connectionActive = false;
+                        Server.this.clientHandlers.remove(this);
+                        System.out.println("Could not reach client, terminating handler.");
                     }
                 }
 
@@ -101,7 +164,6 @@ public class Server {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
 
         }
 
