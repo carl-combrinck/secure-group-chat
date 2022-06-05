@@ -34,18 +34,21 @@ Follow these instructions to build the project:
 
 Once the project is built, run the following commands to:
 
+1. Run the certificate authority
 1. Run the server
 1. Run 3 separate clients
 
 #### Windows
 
-1. ```gradlew run_server```
-1. ```gradlew run_client``` (in 3 separate terminals)
+1. ```run ca```
+1. ```run server```
+1. ```run client``` (in 3 separate terminals)
 
 #### Unix
 
-1. ```./gradlew run_server```
-1. ```./gradlew run_client``` (in 3 separate terminals)
+1. ```./run ca```
+1. ```./run server```
+1. ```./run client``` (in 3 separate terminals)
 
 ### Clean
 
