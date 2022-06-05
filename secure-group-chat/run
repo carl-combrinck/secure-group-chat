@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#######################################################
+# Bash script for executing SecureGroupChat application
+#######################################################
+
+LIB_DIR="app/build/libs/app.jar:bouncy_castle/bcpg-jdk15to18-171.jar:bouncy_castle/bcpkix-jdk15to18-171.jar:bouncy_castle/bcprov-ext-jdk15to18-171.jar:bouncy_castle/bcutil-jdk15to18-171.jar"
+
+if [[ $1 == "ca" ]]
+then
+	echo "[SecureGroupChat] Running Certificate Authority..."
+    java -cp $LIB_DIR com.securegroupchat.CertificateAuthority
+elif [[ $1 == "server" ]]
+then
+	echo "[SecureGroupChat] Starting server..."
+    java -cp $LIB_DIR com.securegroupchat.Server 1234
+elif [[ $1 == "client" ]]
+then
+	echo "[SecureGroupChat] Starting client..."
+    java -cp $LIB_DIR com.securegroupchat.Client localhost 1234
+else
+	echo "[SecureGroupChat] Unrecognised command, terminating."
+fi
