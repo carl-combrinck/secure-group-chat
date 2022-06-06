@@ -9,6 +9,16 @@ import java.util.logging.Level;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 
+/**
+ * Server is a class that facilitates the secure PGP communication between multiple Clients.
+ * An instance of the Server class is started and listens on a given port for incoming client connections.
+ * Acts an intermediary that forwards X509 certificates and secure PGP messages between clients.
+ *
+ * @author Jaron Cohen
+ * @author Carl Combrinck
+ * @author Bailey Green
+ * @version 1.0.0
+ */
 public class Server {
     private final int port;
     private boolean listening = true;
@@ -18,29 +28,45 @@ public class Server {
 
     private final Set<ClientHandler> clientHandlers = new HashSet<>();
 
+    /**
+     * Class constructor
+     */
     public Server() {
         this.port = 4444;
     }
 
+    /**
+     * Class constructor
+     * @param port - port to listen on
+     */
     public Server(int port) {
         this.port = port;
     }
 
-    // Thread-safe adding of client
+    /**
+     * Thread-safe method to add client handler
+     * @param client
+     */
     public void addClientHandler(ClientHandler client){
         synchronized(this.clientHandlers){
             this.clientHandlers.add(client);
         }
     }
 
-    // Thread-safe removing of client
+    /**
+     * Thread-safe method to remove connected clients
+     * @param client
+     */
     public void removeClientHandler(ClientHandler client){
         synchronized(this.clientHandlers){
             this.clientHandlers.remove(client);
         }
     }
 
-    // Broadcasts certificates to all connected clients
+    /**
+     * Method to broadcast certificate received from new client to other connected clients
+     * @param originalMessage
+     */
     public void broadcastCertificate(CertificateMessage originalMessage){
         synchronized(this.clientHandlers){
             for(ClientHandler client : this.clientHandlers){
@@ -55,7 +81,10 @@ public class Server {
         }
     }
 
-    // Sends certificate to requested recipient on behalf of client
+    /**
+     * Sends certificate to requested recipient on behalf of client
+     * @param originalMessage
+     */
     public void forwardCertificate(CertificateMessage originalMessage){
         synchronized(this.clientHandlers){
             for(ClientHandler client : this.clientHandlers){
@@ -71,7 +100,10 @@ public class Server {
         }
     }
 
-    // Sends PGP message to requested recipient on behalf of client
+    /**
+     * Sends PGP message to requested recipient on behalf of client
+     * @param originalMessage
+     */
     public void forwardPGPMessage(PGPMessage originalMessage){
         synchronized(this.clientHandlers){
             for(ClientHandler client : this.clientHandlers){
@@ -87,6 +119,10 @@ public class Server {
         }
     }
 
+    /**
+     * Creates a Server instance and starts server setup process
+     * @param args
+     */
     public static void main(String[] args) {
 
         Server server;
@@ -104,6 +140,10 @@ public class Server {
         }
     }
 
+    /**
+     * Starts server listening on specified port for incoming client connections.
+     * Hands off incoming client connections to ClientHandler instances.
+     */
     public void start() {
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {

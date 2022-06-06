@@ -8,7 +8,6 @@ import java.security.*;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
@@ -21,8 +20,18 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.Enumeration;
 
+/**
+ * Client is a class that represents a connected group chat participant.
+ * Generates an RSA key pair and a CA-signed X509 certificate.
+ * Spawns incoming and outgoing message handlers to facilitate the simultaneous sending and receiving of messages.
+ * Messages are encrypted securely for every connected client and delivered by means of the server.
+ *
+ * @author Jaron Cohen
+ * @author Carl Combrinck
+ * @author Bailey Green
+ * @version 1.0.0
+ */
 public class Client {
-
     private final static Logger logger = Logger.getLogger(Client.class.getName());
     private final static String logTemplate = "%-15s%-5s%-10s%s";
     private final static String errTemplate = "%-15s%s";
@@ -32,18 +41,33 @@ public class Client {
     private KeyStore keyRing;
     private String clientName;
 
+    /**
+     * Default class constructor - generates RSA key pair
+     * @throws NoSuchAlgorithmException
+     */
     public Client() throws NoSuchAlgorithmException {
         this.hostname = "localhost";
         this.port = 4444;
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    /**
+     * Class constructor - specify server hostname and port
+     * @param hostname
+     * @param port
+     * @throws NoSuchAlgorithmException
+     */
     public Client(String hostname, int port) throws NoSuchAlgorithmException {
         this.hostname = hostname;
         this.port = port;
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    /**
+     * Add specified certificate to client keyring associated with specified alias
+     * @param name - alias associated with certificate
+     * @param cert - X509Certificate
+     */
     public void addKeyToRing(String name, X509Certificate cert){
         try {
             keyRing.setCertificateEntry(name, cert);
@@ -52,6 +76,21 @@ public class Client {
         }
     }
 
+    /**
+     * Remove certificate associated with specified alias
+     * @param name - alias associated with certificate
+     */
+    public void removeFromKeyring(String name){
+        try{
+            keyRing.deleteEntry(name);
+        }catch(Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Establishes client connection with server, created input and output object streams and starts incoming message handler
+     */
     private void connectToServer() {
         try {
             Socket socket = new Socket(hostname, port);
@@ -67,11 +106,23 @@ public class Client {
         }
     }
 
+    /**
+     * Creates in-memory KeyStore object that functions as client's keyring to store certificates
+     * @throws KeyStoreException
+     * @throws CertificateException
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     */
     private void createKeyRing() throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
         this.keyRing = KeyStore.getInstance("PKCS12");
         this.keyRing.load(null,null);
     }
 
+    /**
+     * Creates a client instance, performs setup and connects to server.
+     * @param args
+     * @throws NoSuchAlgorithmException
+     */
     public static void main(String[] args) throws NoSuchAlgorithmException {
         Client client;
         ConsoleHandler ch = new ConsoleHandler();
@@ -104,6 +155,9 @@ public class Client {
         }
     }
 
+    /**
+     * Setup method gets user's name and X509Certificate signed by CA needed prior to connection with server
+     */
     private void setup(){
         String clientName = "";
         BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
@@ -117,7 +171,6 @@ public class Client {
             //Get signed certificate
             X509Certificate certificate = new CertificateAuthority().generateSignedCertificate(clientName, personalKeyPair.getPublic());
             logger.log(Level.INFO, String.format(errTemplate, "[INIT]", "Certificate generated."));
-            //System.out.println(certificate);
 
             createKeyRing();
             addKeyToRing(clientName,certificate); //Store client's certificate in in-memory KeyStore
@@ -127,26 +180,52 @@ public class Client {
         }
     }
 
+    /**
+     * Sets name of client
+     * @param clientName
+     */
     private void setClientName(String clientName){
         this.clientName = clientName;
     }
 
+    /**
+     * Gets name of client
+     * @return client's name
+     */
     private String getClientName(){
         return this.clientName;
     }
 
+    /**
+     * IncomingHandler is a private inner class that extends Thread and is spawned by a connected Client to facilitate the reception
+     * of messages.
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class IncomingHandler extends Thread {
         private Socket socket;
         private ObjectInputStream in;
         private ObjectOutputStream out;
 
+        /**
+         * Class constructor
+         * @param socket
+         * @param in
+         * @param out
+         */
         public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
             this.in = in;
             this.out = out;
         }
 
-        // For concurrent writing to output stream
+        /**
+         * Concurrent writing to output stream
+         * @param obj
+         * @throws IOException
+         */
         private void writeToStream(Object obj) throws IOException{
             synchronized (this.out) {
                 this.out.writeObject(obj);
@@ -213,14 +292,25 @@ public class Client {
                     }else if (message instanceof  PGPMessage){
                         PGPMessage pgpMessage = (PGPMessage) message;
                         String sender = pgpMessage.getSender();
-                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getSender(), "IN", "<PGP>", pgpMessage.getReceiver()));
+                        boolean protocol = pgpMessage.getProtocol();
+
+                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getSender(), "IN", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getReceiver()));
 
                         try {
                             byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(), logger);
                             String plaintext = new String(decodedPGPdata);
-                            System.out.println(sender+": "+plaintext);
+
+                            if(protocol){
+                                if(plaintext.equals("QUIT")){
+                                    removeFromKeyring(pgpMessage.getSender());
+                                    logger.log(Level.INFO, String.format(errTemplate, "[QUIT]", pgpMessage.getSender()+" has quit."));
+                                }
+                            }else{
+                                System.out.println(sender+": "+plaintext);
+                            }
+
                         } catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
-                            NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
+                                 NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
                             logger.log(Level.INFO, String.format(errTemplate, "[DECODE]", "Could not decode PGP message!"));
                         }
 
@@ -234,22 +324,79 @@ public class Client {
         }
     }
 
+    /**
+     * OutgoingHandler is a private inner class that extends Thread and is spawned by a connected Client to facilitate the sending
+     * of messages.
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class OutgoingHandler extends Thread {
         private Socket socket;
         private ObjectOutputStream out;
         private ObjectInputStream in;
 
+        /**
+         * Class constructor
+         * @param socket
+         * @param in
+         * @param out
+         */
         public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
             this.in = in;
             this.out = out;
         }
 
+        /**
+         * Concurrent writing to output stream
+         * @param obj
+         * @throws IOException
+         */
         private void writeToStream(Object obj) throws IOException{
             synchronized (this.out) {
                 this.out.writeObject(obj);
             }
-        } 
+        }
+
+        /**
+         * Method to send a piece of plaintext encrypted individually to every connected client for which there is a corresponding
+         * certificate in the keyring
+         * @param plaintext - Message data
+         * @param protocol - flag to indicate whether PGP message is a protocol or chat message
+         * @throws KeyStoreException
+         * @throws IOException
+         * @throws InvalidAlgorithmParameterException
+         * @throws NoSuchPaddingException
+         * @throws IllegalBlockSizeException
+         * @throws NoSuchAlgorithmException
+         * @throws BadPaddingException
+         * @throws InvalidKeyException
+         */
+        private void sendPGPMessageToAll(byte[] plaintext, boolean protocol) throws KeyStoreException, IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+            Enumeration<String> enumeration = keyRing.aliases();
+
+            while(enumeration.hasMoreElements()) {
+                String alias = enumeration.nextElement();
+                X509Certificate tempRecipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
+
+                try {
+                    X500Name x500name = new JcaX509CertificateHolder(tempRecipientCertificate).getSubject();
+                    String CNalias = x500name.toString().substring(3); //Retrieve actual alias from certificate
+
+                    if(!CNalias.equals(clientName)){
+                        byte[] encodedPGPdata = PGPUtilities.encode(plaintext,personalKeyPair.getPrivate(),tempRecipientCertificate.getPublicKey(), logger);
+                        PGPMessage pgpMessage = new PGPMessage(clientName,CNalias,encodedPGPdata,protocol);
+                        writeToStream(pgpMessage);
+                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getSender()));
+                    }
+                }catch(Exception e){
+                    e.printStackTrace();
+                }
+
+            }
+        }
 
         public void run() {
 
@@ -260,25 +407,13 @@ public class Client {
                     userInput = stdIn.readLine();
 
                     if(userInput.equals("quit")){
-                        CommandMessage quit = new CommandMessage(Client.this.clientName, "server", "QUIT");
-                        writeToStream(quit);
-                        logger.log(Level.ALL, String.format(logTemplate, quit.getReceiver(), "OUT", "<CMD>", "QUIT"));
+                        sendPGPMessageToAll("QUIT".getBytes(),true);
+                        logger.log(Level.ALL, String.format(logTemplate, "<ALL>", "OUT", "<PGP_CMD>", "QUIT"));
+                        System.exit(1);
                     }
                     else{
-
-                        Enumeration<String> enumeration = keyRing.aliases();
-
-                        while(enumeration.hasMoreElements()) {
-                            String alias = enumeration.nextElement();
-                            if(!alias.equals(clientName)){
-                                X509Certificate recipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
-                                byte[] encodedPGPdata = PGPUtilities.encode(userInput.getBytes(),personalKeyPair.getPrivate(),recipientCertificate.getPublicKey(), logger);
-                                PGPMessage pgpMessage = new PGPMessage(clientName,alias,encodedPGPdata);
-                                writeToStream(pgpMessage);
-                                logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", "<PGP>", pgpMessage.getSender()));
-                            }
-                        }
-
+                        byte[] plaintext = userInput.getBytes();
+                        sendPGPMessageToAll(plaintext,false);
                     }
 
                 }while(!userInput.equals("quit"));
