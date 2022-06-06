@@ -1,6 +1,7 @@
 package com.securegroupchat;
 
 import com.securegroupchat.PGPUtilities;
+import com.securegroupchat.LoggingLevel;
 
 import java.net.*;
 import java.io.*;
@@ -16,8 +17,6 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.util.logging.Logger;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Level;
 import java.util.Enumeration;
 
 /**
@@ -125,19 +124,16 @@ public class Client {
      */
     public static void main(String[] args) throws NoSuchAlgorithmException {
         Client client;
-        ConsoleHandler ch = new ConsoleHandler();
+        //ConsoleHandler ch = new ConsoleHandler();
 
         boolean debug = false;
+
         if(args[args.length-1].equals("-debug")){
-            ch.setLevel(Level.ALL);
-            logger.addHandler(ch);
-            logger.setLevel(Level.ALL);
+            logger.setLevel(LoggingLevel.DEBUG);
             debug = true;
         }
         else{
-            ch.setLevel(Level.INFO);
-            logger.addHandler(ch);
-            logger.setLevel(Level.INFO);
+            logger.setLevel(LoggingLevel.INFO);
         }
         if ((args.length == 1 && debug) || (args.length == 0 && !debug)) {
             client = new Client();
@@ -150,7 +146,7 @@ public class Client {
             client.setup();
             client.connectToServer();
         } else {
-            logger.log(Level.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Client <host name> <port number> [-debug]"));
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Client <host name> <port number> [-debug]"));
             System.exit(1);
         }
     }
@@ -170,7 +166,7 @@ public class Client {
 
             //Get signed certificate
             X509Certificate certificate = new CertificateAuthority().generateSignedCertificate(clientName, personalKeyPair.getPublic());
-            logger.log(Level.INFO, String.format(errTemplate, "[INIT]", "Certificate generated."));
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[INIT]", "Certificate generated."));
 
             createKeyRing();
             addKeyToRing(clientName,certificate); //Store client's certificate in in-memory KeyStore
@@ -244,20 +240,16 @@ public class Client {
 
                         // Successful Connection Message
                         if(commandMessage.getCommand().equals("CONN_SUCC")){
-                            logger.log(Level.ALL, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CONN_SUCC"));
-                            logger.log(Level.INFO, String.format(errTemplate, "[SERVER]", "Connected to server."));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CONN_SUCC"));
+                            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SERVER]", "Connected to server."));
                             //Send client's certificate to the server
                             CertificateMessage certificateMessage = new CertificateMessage(clientName,"<ALL>", (X509Certificate) keyRing.getCertificate(clientName), false);
                             writeToStream(certificateMessage);
-                            logger.log(Level.ALL, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", "BROADCAST"));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", "BROADCAST"));
                         }
-                        // End Connection Message
-                        else if(commandMessage.getCommand().equals("CONN_END")){
-                            System.out.println("> Connection to server closed.");
-                            break;
-                        }else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
-                            logger.log(Level.ALL, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CERT_BROADCAST"));
-                            logger.log(Level.INFO, String.format(errTemplate, "[SERVER]", "Certificate broadcast, you may now send messages."));
+                        else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CERT_BROADCAST"));
+                            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SERVER]", "Certificate broadcast, you may now send messages."));
                             new OutgoingHandler(socket, in, out).start(); //Client ready to send messages
                         }
 
@@ -270,22 +262,22 @@ public class Client {
                             X500Name x500name = new JcaX509CertificateHolder(certificateMessage.getCertificate()).getSubject();
                             String CNalias = x500name.toString().substring(3);
 
-                            logger.log(Level.ALL, String.format(logTemplate, certificateMessage.getSender(), "IN", "<CERT>", CNalias));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getSender(), "IN", "<CERT>", CNalias));
 
                             try {
                                 CertificateAuthority ca = new CertificateAuthority();
                                 certificateMessage.getCertificate().verify(ca.getPublicKey()); // Verify certificate
                                 Client.this.addKeyToRing(CNalias, certificateMessage.getCertificate());
-                                logger.log(Level.ALL, String.format(errTemplate, "[CERT]", "Certificate verified: " + CNalias));
+                                logger.log(LoggingLevel.DEBUG, String.format(errTemplate, "[CERT]", "Certificate verified: " + CNalias));
                                 if(!certificateMessage.getReply()) {
                                     // Send client's certificate back as a reply
                                     CertificateMessage reply = new CertificateMessage(clientName, CNalias, (X509Certificate) keyRing.getCertificate(clientName), true);
                                     writeToStream(reply);
-                                    logger.log(Level.ALL, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", CNalias));
+                                    logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", CNalias));
                                 }
 
                             } catch (Exception e) {
-                                logger.log(Level.INFO, String.format(errTemplate, "[CERT]", "Could not verify certificate!"));
+                                logger.log(LoggingLevel.INFO, String.format(errTemplate, "[CERT]", "Could not verify certificate!"));
                             }
                         }
 
@@ -293,8 +285,7 @@ public class Client {
                         PGPMessage pgpMessage = (PGPMessage) message;
                         String sender = pgpMessage.getSender();
                         boolean protocol = pgpMessage.getProtocol();
-
-                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getSender(), "IN", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getReceiver()));
+                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, pgpMessage.getSender(), "IN", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getReceiver()));
 
                         try {
                             byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(), logger);
@@ -303,15 +294,15 @@ public class Client {
                             if(protocol){
                                 if(plaintext.equals("QUIT")){
                                     removeFromKeyring(pgpMessage.getSender());
-                                    logger.log(Level.INFO, String.format(errTemplate, "[QUIT]", pgpMessage.getSender()+" has quit."));
+                                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "[QUIT]", pgpMessage.getSender()+" has quit."));
                                 }
                             }else{
-                                System.out.println(sender+": "+plaintext);
+                                System.out.println("<<< " + sender+": "+plaintext);
                             }
 
                         } catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
                                  NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
-                            logger.log(Level.INFO, String.format(errTemplate, "[DECODE]", "Could not decode PGP message!"));
+                            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[DECODE]", "Could not decode PGP message!"));
                         }
 
                     }
@@ -389,7 +380,7 @@ public class Client {
                         byte[] encodedPGPdata = PGPUtilities.encode(plaintext,personalKeyPair.getPrivate(),tempRecipientCertificate.getPublicKey(), logger);
                         PGPMessage pgpMessage = new PGPMessage(clientName,CNalias,encodedPGPdata,protocol);
                         writeToStream(pgpMessage);
-                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getSender()));
+                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", protocol ? "<PGP_CMD>" : "<PGP>", pgpMessage.getSender()));
                     }
                 }catch(Exception e){
                     e.printStackTrace();
@@ -408,15 +399,15 @@ public class Client {
 
                     if(userInput.equals("quit")){
                         sendPGPMessageToAll("QUIT".getBytes(),true);
-                        logger.log(Level.ALL, String.format(logTemplate, "<ALL>", "OUT", "<PGP_CMD>", "QUIT"));
-                        System.exit(1);
+                        System.out.println("Quitting application...");
+                        System.exit(0);
                     }
                     else{
                         byte[] plaintext = userInput.getBytes();
                         sendPGPMessageToAll(plaintext,false);
                     }
 
-                }while(!userInput.equals("quit"));
+                } while(!userInput.equals("quit"));
                 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -438,6 +429,4 @@ public class Client {
             }
         }
     }
-
-
 }
