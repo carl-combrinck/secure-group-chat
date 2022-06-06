@@ -35,23 +35,3 @@ tasks.named('test') {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
 }
-
-task run_server(type:JavaExec) {
-    standardInput = System.in
-    mainClass = "com.securegroupchat.Server"
-    classpath = sourceSets.main.runtimeClasspath
-    args '1234'
-}
-
-task run_client(type:JavaExec) {
-    standardInput = System.in
-    mainClass = "com.securegroupchat.Client"
-    classpath = sourceSets.main.runtimeClasspath
-    args 'localhost', '1234'
-}
-
-task run_ca(type:JavaExec) {
-    standardInput = System.in
-    mainClass = "com.securegroupchat.CertificateAuthority"
-    classpath = sourceSets.main.runtimeClasspath
-}

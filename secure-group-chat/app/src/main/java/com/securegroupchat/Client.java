@@ -1,6 +1,7 @@
 package com.securegroupchat;
 
 import com.securegroupchat.PGPUtilities;
+import com.securegroupchat.LoggingLevel;
 
 import java.net.*;
 import java.io.*;
@@ -8,7 +9,6 @@ import java.security.*;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
@@ -19,27 +19,54 @@ import javax.crypto.NoSuchPaddingException;
 import java.util.logging.Logger;
 import java.util.Enumeration;
 
+/**
+ * Client is a class that represents a connected group chat participant.
+ * Generates an RSA key pair and a CA-signed X509 certificate.
+ * Spawns incoming and outgoing message handlers to facilitate the simultaneous sending and receiving of messages.
+ * Messages are encrypted securely for every connected client and delivered by means of the server.
+ *
+ * @author Jaron Cohen
+ * @author Carl Combrinck
+ * @author Bailey Green
+ * @version 1.0.0
+ */
 public class Client {
-
     private final static Logger logger = Logger.getLogger(Client.class.getName());
+    private final static String logTemplate = "%-15s%-5s%-10s%s";
+    private final static String errTemplate = "%-15s%s";
     private final String hostname;
     private final int port;
     private final KeyPair personalKeyPair;
     private KeyStore keyRing;
     private String clientName;
 
+    /**
+     * Default class constructor - generates RSA key pair
+     * @throws NoSuchAlgorithmException
+     */
     public Client() throws NoSuchAlgorithmException {
         this.hostname = "localhost";
         this.port = 4444;
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    /**
+     * Class constructor - specify server hostname and port
+     * @param hostname
+     * @param port
+     * @throws NoSuchAlgorithmException
+     */
     public Client(String hostname, int port) throws NoSuchAlgorithmException {
         this.hostname = hostname;
         this.port = port;
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    /**
+     * Add specified certificate to client keyring associated with specified alias
+     * @param name - alias associated with certificate
+     * @param cert - X509Certificate
+     */
     public void addKeyToRing(String name, X509Certificate cert){
         try {
             keyRing.setCertificateEntry(name, cert);
@@ -48,14 +75,28 @@ public class Client {
         }
     }
 
+    /**
+     * Remove certificate associated with specified alias
+     * @param name - alias associated with certificate
+     */
+    public void removeFromKeyring(String name){
+        try{
+            keyRing.deleteEntry(name);
+        }catch(Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Establishes client connection with server, created input and output object streams and starts incoming message handler
+     */
     private void connectToServer() {
         try {
             Socket socket = new Socket(hostname, port);
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-            AtomicBoolean ready = new AtomicBoolean(false);
 
-            new IncomingHandler(socket, in, out, ready).start();
+            new IncomingHandler(socket, in, out).start();
 
         } catch (UnknownHostException e) {
             System.exit(1);
@@ -64,30 +105,55 @@ public class Client {
         }
     }
 
+    /**
+     * Creates in-memory KeyStore object that functions as client's keyring to store certificates
+     * @throws KeyStoreException
+     * @throws CertificateException
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     */
     private void createKeyRing() throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
         this.keyRing = KeyStore.getInstance("PKCS12");
         this.keyRing.load(null,null);
     }
 
+    /**
+     * Creates a client instance, performs setup and connects to server.
+     * @param args
+     * @throws NoSuchAlgorithmException
+     */
     public static void main(String[] args) throws NoSuchAlgorithmException {
         Client client;
+        //ConsoleHandler ch = new ConsoleHandler();
 
-        if (args.length == 0) {
+        boolean debug = false;
+
+        if(args[args.length-1].equals("-debug")){
+            logger.setLevel(LoggingLevel.DEBUG);
+            debug = true;
+        }
+        else{
+            logger.setLevel(LoggingLevel.INFO);
+        }
+        if ((args.length == 1 && debug) || (args.length == 0 && !debug)) {
             client = new Client();
             client.setup();
             client.connectToServer();
-        } else if (args.length == 2) {
+        } else if ((args.length == 3 && debug) || (args.length == 2 && !debug)) {
             String hostname = args[0];
             int port = Integer.parseInt(args[1]);
             client = new Client(hostname, port);
             client.setup();
             client.connectToServer();
         } else {
-            System.err.println("Usage: java Client <host name> <port number>");
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Client <host name> <port number> [-debug]"));
             System.exit(1);
         }
     }
 
+    /**
+     * Setup method gets user's name and X509Certificate signed by CA needed prior to connection with server
+     */
     private void setup(){
         String clientName = "";
         BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
@@ -100,8 +166,7 @@ public class Client {
 
             //Get signed certificate
             X509Certificate certificate = new CertificateAuthority().generateSignedCertificate(clientName, personalKeyPair.getPublic());
-            System.out.println("Certificate generated.");
-            //System.out.println(certificate);
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[INIT]", "Certificate generated."));
 
             createKeyRing();
             addKeyToRing(clientName,certificate); //Store client's certificate in in-memory KeyStore
@@ -111,28 +176,52 @@ public class Client {
         }
     }
 
+    /**
+     * Sets name of client
+     * @param clientName
+     */
     private void setClientName(String clientName){
         this.clientName = clientName;
     }
 
+    /**
+     * Gets name of client
+     * @return client's name
+     */
     private String getClientName(){
         return this.clientName;
     }
 
+    /**
+     * IncomingHandler is a private inner class that extends Thread and is spawned by a connected Client to facilitate the reception
+     * of messages.
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class IncomingHandler extends Thread {
         private Socket socket;
         private ObjectInputStream in;
         private ObjectOutputStream out;
-        private AtomicBoolean ready;
 
-        public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
+        /**
+         * Class constructor
+         * @param socket
+         * @param in
+         * @param out
+         */
+        public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
             this.in = in;
             this.out = out;
-            this.ready = ready;
         }
 
-        // For concurrent writing to output stream
+        /**
+         * Concurrent writing to output stream
+         * @param obj
+         * @throws IOException
+         */
         private void writeToStream(Object obj) throws IOException{
             synchronized (this.out) {
                 this.out.writeObject(obj);
@@ -151,20 +240,17 @@ public class Client {
 
                         // Successful Connection Message
                         if(commandMessage.getCommand().equals("CONN_SUCC")){
-                            System.out.println("> Connection to server successful.");
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CONN_SUCC"));
+                            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SERVER]", "Connected to server."));
                             //Send client's certificate to the server
                             CertificateMessage certificateMessage = new CertificateMessage(clientName,"<ALL>", (X509Certificate) keyRing.getCertificate(clientName), false);
                             writeToStream(certificateMessage);
-                            System.out.println("Sent certificate to server for broadcast.");
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", "BROADCAST"));
                         }
-                        // End Connection Message
-                        else if(commandMessage.getCommand().equals("CONN_END")){
-                            System.out.println("> Connection to server closed.");
-                            break;
-                        }else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
-                            System.out.println("> Certificate has been broadcast to other clients by server.");
-                            System.out.println("> You may begin sending messages.");
-                            new OutgoingHandler(socket, in, out, ready).start(); //Client ready to send messages
+                        else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CERT_BROADCAST"));
+                            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SERVER]", "Certificate broadcast, you may now send messages."));
+                            new OutgoingHandler(socket, in, out).start(); //Client ready to send messages
                         }
 
                     } else if (message instanceof CertificateMessage) {
@@ -176,42 +262,47 @@ public class Client {
                             X500Name x500name = new JcaX509CertificateHolder(certificateMessage.getCertificate()).getSubject();
                             String CNalias = x500name.toString().substring(3);
 
-                            if(certificateMessage.getReply()){
-                                System.out.println("Received certificate reply from client: " + CNalias);
-                            }else{
-                                System.out.println("Received certificate from client: " + CNalias);
-                            }
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getSender(), "IN", "<CERT>", CNalias));
 
                             try {
                                 CertificateAuthority ca = new CertificateAuthority();
                                 certificateMessage.getCertificate().verify(ca.getPublicKey()); // Verify certificate
                                 Client.this.addKeyToRing(CNalias, certificateMessage.getCertificate());
-                                System.out.println("Certificate verified as valid.");
+                                logger.log(LoggingLevel.DEBUG, String.format(errTemplate, "[CERT]", "Certificate verified: " + CNalias));
                                 if(!certificateMessage.getReply()) {
-                                    System.out.println("Replying with own certificate.");
                                     // Send client's certificate back as a reply
                                     CertificateMessage reply = new CertificateMessage(clientName, CNalias, (X509Certificate) keyRing.getCertificate(clientName), true);
                                     writeToStream(reply);
+                                    logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", CNalias));
                                 }
 
                             } catch (Exception e) {
-                                System.out.println("Could not verify certificate!");
+                                logger.log(LoggingLevel.INFO, String.format(errTemplate, "[CERT]", "Could not verify certificate!"));
                             }
                         }
 
                     }else if (message instanceof  PGPMessage){
                         PGPMessage pgpMessage = (PGPMessage) message;
                         String sender = pgpMessage.getSender();
-                        System.out.println("Received PGP message from: " + sender);
-                        System.out.println("Decoding message...");
+                        boolean protocol = pgpMessage.getProtocol();
+                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, pgpMessage.getSender(), "IN", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getReceiver()));
 
                         try {
-                            byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(),logger);
+                            byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(), logger);
                             String plaintext = new String(decodedPGPdata);
-                            System.out.println(sender+": "+plaintext);
-                        }catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
-                                NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
-                            System.out.println("Could not decode message!");
+
+                            if(protocol){
+                                if(plaintext.equals("QUIT")){
+                                    removeFromKeyring(pgpMessage.getSender());
+                                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "[QUIT]", pgpMessage.getSender()+" has quit."));
+                                }
+                            }else{
+                                System.out.println("<<< " + sender+": "+plaintext);
+                            }
+
+                        } catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
+                                 NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
+                            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[DECODE]", "Could not decode PGP message!"));
                         }
 
                     }
@@ -224,24 +315,79 @@ public class Client {
         }
     }
 
+    /**
+     * OutgoingHandler is a private inner class that extends Thread and is spawned by a connected Client to facilitate the sending
+     * of messages.
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class OutgoingHandler extends Thread {
         private Socket socket;
         private ObjectOutputStream out;
         private ObjectInputStream in;
-        private AtomicBoolean ready;
 
-        public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
+        /**
+         * Class constructor
+         * @param socket
+         * @param in
+         * @param out
+         */
+        public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
             this.in = in;
             this.out = out;
-            this.ready = ready;
         }
 
+        /**
+         * Concurrent writing to output stream
+         * @param obj
+         * @throws IOException
+         */
         private void writeToStream(Object obj) throws IOException{
             synchronized (this.out) {
                 this.out.writeObject(obj);
             }
-        } 
+        }
+
+        /**
+         * Method to send a piece of plaintext encrypted individually to every connected client for which there is a corresponding
+         * certificate in the keyring
+         * @param plaintext - Message data
+         * @param protocol - flag to indicate whether PGP message is a protocol or chat message
+         * @throws KeyStoreException
+         * @throws IOException
+         * @throws InvalidAlgorithmParameterException
+         * @throws NoSuchPaddingException
+         * @throws IllegalBlockSizeException
+         * @throws NoSuchAlgorithmException
+         * @throws BadPaddingException
+         * @throws InvalidKeyException
+         */
+        private void sendPGPMessageToAll(byte[] plaintext, boolean protocol) throws KeyStoreException, IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+            Enumeration<String> enumeration = keyRing.aliases();
+
+            while(enumeration.hasMoreElements()) {
+                String alias = enumeration.nextElement();
+                X509Certificate tempRecipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
+
+                try {
+                    X500Name x500name = new JcaX509CertificateHolder(tempRecipientCertificate).getSubject();
+                    String CNalias = x500name.toString().substring(3); //Retrieve actual alias from certificate
+
+                    if(!CNalias.equals(clientName)){
+                        byte[] encodedPGPdata = PGPUtilities.encode(plaintext,personalKeyPair.getPrivate(),tempRecipientCertificate.getPublicKey(), logger);
+                        PGPMessage pgpMessage = new PGPMessage(clientName,CNalias,encodedPGPdata,protocol);
+                        writeToStream(pgpMessage);
+                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", protocol ? "<PGP_CMD>" : "<PGP>", pgpMessage.getSender()));
+                    }
+                }catch(Exception e){
+                    e.printStackTrace();
+                }
+
+            }
+        }
 
         public void run() {
 
@@ -252,27 +398,16 @@ public class Client {
                     userInput = stdIn.readLine();
 
                     if(userInput.equals("quit")){
-                        CommandMessage quit = new CommandMessage(Client.this.clientName, "server", "QUIT");
-                        writeToStream(quit);
+                        sendPGPMessageToAll("QUIT".getBytes(),true);
+                        System.out.println("Quitting application...");
+                        System.exit(0);
                     }
                     else{
-
-                        Enumeration<String> enumeration = keyRing.aliases();
-
-                        while(enumeration.hasMoreElements()) {
-                            String alias = enumeration.nextElement();
-                            if(!alias.equals(clientName)){
-                                X509Certificate recipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
-                                byte[] encodedPGPdata = PGPUtilities.encode(userInput.getBytes(),personalKeyPair.getPrivate(),recipientCertificate.getPublicKey(),logger);
-                                PGPMessage pgpMessage = new PGPMessage(clientName,alias,encodedPGPdata);
-                                System.out.println("Sending message to: "+alias);
-                                writeToStream(pgpMessage);
-                            }
-                        }
-
+                        byte[] plaintext = userInput.getBytes();
+                        sendPGPMessageToAll(plaintext,false);
                     }
 
-                }while(!userInput.equals("quit"));
+                } while(!userInput.equals("quit"));
                 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -294,6 +429,4 @@ public class Client {
             }
         }
     }
-
-
 }

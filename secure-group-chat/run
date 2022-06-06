@@ -1,8 +1,6 @@
 #!/bin/bash
 
-#######################################################
 # Bash script for executing SecureGroupChat application
-#######################################################
 
 LIB_DIR="app/build/libs/app.jar:bouncy_castle/bcpg-jdk15to18-171.jar:bouncy_castle/bcpkix-jdk15to18-171.jar:bouncy_castle/bcprov-ext-jdk15to18-171.jar:bouncy_castle/bcutil-jdk15to18-171.jar"
 
@@ -17,7 +15,12 @@ then
 elif [[ $1 == "client" ]]
 then
 	echo "[SecureGroupChat] Starting client..."
-    java -cp $LIB_DIR com.securegroupchat.Client localhost 1234
+	if [[ $# == 2 ]]
+	then
+		java -cp $LIB_DIR com.securegroupchat.Client localhost 1234 $2
+	else
+		java -cp $LIB_DIR com.securegroupchat.Client localhost 1234
+	fi
 else
 	echo "[SecureGroupChat] Unrecognised command, terminating."
 fi

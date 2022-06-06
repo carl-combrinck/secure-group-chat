@@ -1,7 +1,10 @@
 package com.securegroupchat;
 
+import com.securegroupchat.LoggingLevel;
+
 import java.util.Arrays;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
 import java.util.Base64;
@@ -333,7 +336,7 @@ public class PGPUtilities{
      * @param esesh The encrypted session data
      * @param pgp The PGP message
      */
-    private static void logEncode(Logger logger, byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp){
+    private static void logEncode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
         String log = "Encoding message...\n" +
         "RAW MESSAGE:" + line + "%s" + line +
@@ -343,7 +346,7 @@ public class PGPUtilities{
         "ENCRYPTED MESSAGE:" + line + "%s" + line +
         "ENCRYPTED SESSION:" + line + "%s" + line +
         "PGP MESSAGE:" + line + "%s" + line;
-        logger.info(String.format(log, new String(raw), new String(r64Encode(sign)), new String(r64Encode(zip)), 
+        logger.log(LoggingLevel.DEBUG, String.format(log, new String(raw), new String(r64Encode(sign)), new String(r64Encode(zip)), 
             new String(r64Encode(sesh)), new String(r64Encode(emsg)), new String(r64Encode(esesh)), new String(r64Encode(pgp))));
     }
     
@@ -359,7 +362,7 @@ public class PGPUtilities{
      * @param esesh The encrypted session data
      * @param pgp The PGP message
      */
-    private static void logDecode(Logger logger, byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp){
+    private static void logDecode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
         String log = "Decoding message...\n" +
         "PGP MESSAGE:" + line + "%s" + line +
@@ -369,7 +372,7 @@ public class PGPUtilities{
         "COMPRESSED:" + line + "%s" + line +
         "SIGNATURE:" + line+ "%s" + line +
         "RAW MESSAGE:" + line + "%s" + line;
-        logger.info(String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
+        logger.log(LoggingLevel.DEBUG, String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
         new String(r64Encode(sesh)), new String(r64Encode(zip)), new String(r64Encode(sign)), new String(raw)));
     }
 
@@ -407,7 +410,7 @@ public class PGPUtilities{
         // Base/Radix 64 encode message
         byte[] encoded64Message = r64Encode(encodedMessage);
         // Logging
-        logEncode(logger, message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
+        logEncode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
         return encoded64Message;
     }
 
@@ -452,7 +455,7 @@ public class PGPUtilities{
             throw new SignatureException("Invalid message signature");
         }
         // Logging
-        logDecode(logger, message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
+        logDecode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
         return message;
     }
 }
