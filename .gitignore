@@ -1,4 +1,6 @@
 build/
 bin/
 .gradle
+.project
+.settings/
 nis_group_chat_PKCS12
