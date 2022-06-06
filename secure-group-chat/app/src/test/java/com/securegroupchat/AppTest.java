@@ -34,7 +34,6 @@ public class AppTest
                             "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
                             ".,/;\"'\\{}[]-_=+?!@#$%^&*()`~<>|" +
                             "\n\t\b\f\r";
-    private final static Logger logger = Logger.getLogger(AppTest.class.getName());
     
     /** 
      * Tests compression and decompression using PGPUtilities 
@@ -171,8 +170,8 @@ public class AppTest
     {
         KeyPair senderPair = PGPUtilities.generateRSAKeyPair();
         KeyPair receiverPair = PGPUtilities.generateRSAKeyPair();
-        byte[] encodedMessage = PGPUtilities.encode(TEST_STRING.getBytes(), senderPair.getPrivate(), receiverPair.getPublic(), logger);
-        byte[] decodedMessage = PGPUtilities.decode(encodedMessage, receiverPair.getPrivate(), senderPair.getPublic(), logger);
+        byte[] encodedMessage = PGPUtilities.encode(TEST_STRING.getBytes(), senderPair.getPrivate(), receiverPair.getPublic());
+        byte[] decodedMessage = PGPUtilities.decode(encodedMessage, receiverPair.getPrivate(), senderPair.getPublic());
         assertTrue(Arrays.equals(TEST_STRING.getBytes(), decodedMessage));
     }
 
