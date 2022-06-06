@@ -4,6 +4,9 @@
 
 SET LIB_DIR=app\build\libs\app.jar;bouncy_castle\bcpg-jdk15to18-171.jar;bouncy_castle\bcpkix-jdk15to18-171.jar;bouncy_castle\bcprov-ext-jdk15to18-171.jar;bouncy_castle\bcutil-jdk15to18-171.jar
 
+SET argC=0
+for %%x in (%*) do SET /A argC+=1
+
 IF "%1" == "ca"  (
   ECHO [SecureGroupChat] Running Certificate Authority...
   java "-cp" "%LIB_DIR%" "com.securegroupchat.CertificateAuthority"
@@ -14,7 +17,11 @@ IF "%1" == "ca"  (
   ) ELSE (
     IF "%1" == "client" (
       ECHO [SecureGroupChat] Starting client...
-      java "-cp" "%LIB_DIR%" "com.securegroupchat.Client" "localhost" "1234"
+      IF %argC% == 2 (
+        java "-cp" "%LIB_DIR%" "com.securegroupchat.Client" "localhost" "1234" "%2"
+      ) ELSE (
+        java "-cp" "%LIB_DIR%" "com.securegroupchat.Client" "localhost" "1234"
+      )
     ) ELSE (
       ECHO [SecureGroupChat] Unrecognised command, terminating.
     )
