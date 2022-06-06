@@ -20,6 +20,17 @@ import java.util.logging.Logger;
 import java.util.logging.Level;
 import java.util.Enumeration;
 
+/**
+ * Client is a class that represents a connected group chat participant.
+ * Generates an RSA key pair and a CA-signed X509 certificate.
+ * Spawns incoming and outgoing message handlers to facilitate the simultaneous sending and receiving of messages.
+ * Messages are encrypted securely for every connected client and delivered by means of the server.
+ *
+ * @author Jaron Cohen
+ * @author Carl Combrinck
+ * @author Bailey Green
+ * @version 1.0.0
+ */
 public class Client {
     private final static Logger logger = Logger.getLogger(Client.class.getName());
     private final static String logTemplate = "%-15s%-5s%-10s%s";
@@ -30,18 +41,33 @@ public class Client {
     private KeyStore keyRing;
     private String clientName;
 
+    /**
+     * Default class constructor - generates RSA key pair
+     * @throws NoSuchAlgorithmException
+     */
     public Client() throws NoSuchAlgorithmException {
         this.hostname = "localhost";
         this.port = 4444;
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    /**
+     * Class constructor - specify server hostname and port
+     * @param hostname
+     * @param port
+     * @throws NoSuchAlgorithmException
+     */
     public Client(String hostname, int port) throws NoSuchAlgorithmException {
         this.hostname = hostname;
         this.port = port;
         this.personalKeyPair = PGPUtilities.generateRSAKeyPair();
     }
 
+    /**
+     * Add specified certificate to client keyring associated with specified alias
+     * @param name - alias associated with certificate
+     * @param cert - X509Certificate
+     */
     public void addKeyToRing(String name, X509Certificate cert){
         try {
             keyRing.setCertificateEntry(name, cert);
@@ -49,6 +75,11 @@ public class Client {
             e.printStackTrace();
         }
     }
+
+    /**
+     * Remove certificate associated with specified alias
+     * @param name - alias associated with certificate
+     */
     public void removeFromKeyring(String name){
         try{
             keyRing.deleteEntry(name);
@@ -57,6 +88,9 @@ public class Client {
         }
     }
 
+    /**
+     * Establishes client connection with server, created input and output object streams and starts incoming message handler
+     */
     private void connectToServer() {
         try {
             Socket socket = new Socket(hostname, port);
@@ -73,11 +107,23 @@ public class Client {
         }
     }
 
+    /**
+     * Creates in-memory KeyStore object that functions as client's keyring to store certificates
+     * @throws KeyStoreException
+     * @throws CertificateException
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     */
     private void createKeyRing() throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
         this.keyRing = KeyStore.getInstance("PKCS12");
         this.keyRing.load(null,null);
     }
 
+    /**
+     * Creates a client instance, performs setup and connects to server.
+     * @param args
+     * @throws NoSuchAlgorithmException
+     */
     public static void main(String[] args) throws NoSuchAlgorithmException {
         Client client;
         logger.setLevel(Level.ALL);
@@ -99,6 +145,9 @@ public class Client {
         }
     }
 
+    /**
+     * Setup method gets user's name and X509Certificate signed by CA needed prior to connection with server
+     */
     private void setup(){
         String clientName = "";
         BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
@@ -112,7 +161,6 @@ public class Client {
             //Get signed certificate
             X509Certificate certificate = new CertificateAuthority().generateSignedCertificate(clientName, personalKeyPair.getPublic());
             logger.log(Level.INFO, String.format(errTemplate, "[INIT]", "Certificate generated."));
-            //System.out.println(certificate);
 
             createKeyRing();
             addKeyToRing(clientName,certificate); //Store client's certificate in in-memory KeyStore
@@ -122,20 +170,43 @@ public class Client {
         }
     }
 
+    /**
+     * Sets name of client
+     * @param clientName
+     */
     private void setClientName(String clientName){
         this.clientName = clientName;
     }
 
+    /**
+     * Gets name of client
+     * @return client's name
+     */
     private String getClientName(){
         return this.clientName;
     }
 
+    /**
+     * IncomingHandler is a private inner class that extends Thread and is spawned by a connected Client to facilitate the reception
+     * of messages.
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class IncomingHandler extends Thread {
         private Socket socket;
         private ObjectInputStream in;
         private ObjectOutputStream out;
         private AtomicBoolean ready;
 
+        /**
+         * Class constructor
+         * @param socket
+         * @param in
+         * @param out
+         * @param ready
+         */
         public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
             this.socket = socket;
             this.in = in;
@@ -143,7 +214,11 @@ public class Client {
             this.ready = ready;
         }
 
-        // For concurrent writing to output stream
+        /**
+         * Concurrent writing to output stream
+         * @param obj
+         * @throws IOException
+         */
         private void writeToStream(Object obj) throws IOException{
             synchronized (this.out) {
                 this.out.writeObject(obj);
@@ -242,12 +317,27 @@ public class Client {
         }
     }
 
+    /**
+     * OutgoingHandler is a private inner class that extends Thread and is spawned by a connected Client to facilitate the sending
+     * of messages.
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class OutgoingHandler extends Thread {
         private Socket socket;
         private ObjectOutputStream out;
         private ObjectInputStream in;
         private AtomicBoolean ready;
 
+        /**
+         * Class constructor
+         * @param socket
+         * @param in
+         * @param out
+         * @param ready
+         */
         public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
             this.socket = socket;
             this.in = in;
@@ -255,12 +345,31 @@ public class Client {
             this.ready = ready;
         }
 
+        /**
+         * Concurrent writing to output stream
+         * @param obj
+         * @throws IOException
+         */
         private void writeToStream(Object obj) throws IOException{
             synchronized (this.out) {
                 this.out.writeObject(obj);
             }
         }
 
+        /**
+         * Method to send a piece of plaintext encrypted individually to every connected client for which there is a corresponding
+         * certificate in the keyring
+         * @param plaintext - Message data
+         * @param protocol - flag to indicate whether PGP message is a protocol or chat message
+         * @throws KeyStoreException
+         * @throws IOException
+         * @throws InvalidAlgorithmParameterException
+         * @throws NoSuchPaddingException
+         * @throws IllegalBlockSizeException
+         * @throws NoSuchAlgorithmException
+         * @throws BadPaddingException
+         * @throws InvalidKeyException
+         */
         private void sendPGPMessageToAll(byte[] plaintext, boolean protocol) throws KeyStoreException, IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
             Enumeration<String> enumeration = keyRing.aliases();
 
