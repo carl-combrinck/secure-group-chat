@@ -1,5 +1,7 @@
 package com.securegroupchat;
 
+import com.securegroupchat.LoggingLevel;
+
 import java.util.Arrays;
 import java.util.logging.Logger;
 import java.util.logging.Level;
@@ -344,7 +346,7 @@ public class PGPUtilities{
         "ENCRYPTED MESSAGE:" + line + "%s" + line +
         "ENCRYPTED SESSION:" + line + "%s" + line +
         "PGP MESSAGE:" + line + "%s" + line;
-        logger.log(Level.ALL, String.format(log, new String(raw), new String(r64Encode(sign)), new String(r64Encode(zip)), 
+        logger.log(LoggingLevel.DEBUG, String.format(log, new String(raw), new String(r64Encode(sign)), new String(r64Encode(zip)), 
             new String(r64Encode(sesh)), new String(r64Encode(emsg)), new String(r64Encode(esesh)), new String(r64Encode(pgp))));
     }
     
@@ -370,7 +372,7 @@ public class PGPUtilities{
         "COMPRESSED:" + line + "%s" + line +
         "SIGNATURE:" + line+ "%s" + line +
         "RAW MESSAGE:" + line + "%s" + line;
-        logger.log(Level.ALL, String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
+        logger.log(LoggingLevel.DEBUG, String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
         new String(r64Encode(sesh)), new String(r64Encode(zip)), new String(r64Encode(sign)), new String(raw)));
     }
 
