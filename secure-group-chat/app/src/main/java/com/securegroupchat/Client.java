@@ -21,7 +21,6 @@ import java.util.logging.Level;
 import java.util.Enumeration;
 
 public class Client {
-
     private final static Logger logger = Logger.getLogger(Client.class.getName());
     private final static String logTemplate = "%-15s%-5s%-10s%s";
     private final static String errTemplate = "%-15s%s";
@@ -47,6 +46,13 @@ public class Client {
         try {
             keyRing.setCertificateEntry(name, cert);
         } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    public void removeFromKeyring(String name){
+        try{
+            keyRing.deleteEntry(name);
+        }catch(Exception e){
             e.printStackTrace();
         }
     }
@@ -204,14 +210,25 @@ public class Client {
                     }else if (message instanceof  PGPMessage){
                         PGPMessage pgpMessage = (PGPMessage) message;
                         String sender = pgpMessage.getSender();
-                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getSender(), "IN", "<PGP>", pgpMessage.getReceiver()));
+                        boolean protocol = pgpMessage.getProtocol();
+
+                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getSender(), "IN", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getReceiver()));
 
                         try {
                             byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey());
                             String plaintext = new String(decodedPGPdata);
-                            System.out.println(sender+": "+plaintext);
+
+                            if(protocol){
+                                if(plaintext.equals("QUIT")){
+                                    removeFromKeyring(pgpMessage.getSender());
+                                    logger.log(Level.INFO, String.format(errTemplate, "[QUIT]", pgpMessage.getSender()+" has quit."));
+                                }
+                            }else{
+                                System.out.println(sender+": "+plaintext);
+                            }
+
                         } catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
-                            NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
+                                 NoSuchAlgorithmException | BadPaddingException | SignatureException | InvalidKeyException e) {
                             logger.log(Level.INFO, String.format(errTemplate, "[DECODE]", "Could not decode PGP message!"));
                         }
 
@@ -242,7 +259,31 @@ public class Client {
             synchronized (this.out) {
                 this.out.writeObject(obj);
             }
-        } 
+        }
+
+        private void sendPGPMessageToAll(byte[] plaintext, boolean protocol) throws KeyStoreException, IOException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+            Enumeration<String> enumeration = keyRing.aliases();
+
+            while(enumeration.hasMoreElements()) {
+                String alias = enumeration.nextElement();
+                X509Certificate tempRecipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
+
+                try {
+                    X500Name x500name = new JcaX509CertificateHolder(tempRecipientCertificate).getSubject();
+                    String CNalias = x500name.toString().substring(3); //Retrieve actual alias from certificate
+
+                    if(!CNalias.equals(clientName)){
+                        byte[] encodedPGPdata = PGPUtilities.encode(plaintext,personalKeyPair.getPrivate(),tempRecipientCertificate.getPublicKey());
+                        PGPMessage pgpMessage = new PGPMessage(clientName,CNalias,encodedPGPdata,protocol);
+                        writeToStream(pgpMessage);
+                        logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getSender()));
+                    }
+                }catch(Exception e){
+                    e.printStackTrace();
+                }
+
+            }
+        }
 
         public void run() {
 
@@ -253,25 +294,13 @@ public class Client {
                     userInput = stdIn.readLine();
 
                     if(userInput.equals("quit")){
-                        CommandMessage quit = new CommandMessage(Client.this.clientName, "server", "QUIT");
-                        writeToStream(quit);
-                        logger.log(Level.ALL, String.format(logTemplate, quit.getReceiver(), "OUT", "<CMD>", "QUIT"));
+                        sendPGPMessageToAll("QUIT".getBytes(),true);
+                        logger.log(Level.ALL, String.format(logTemplate, "<ALL>", "OUT", "<PGP_CMD>", "QUIT"));
+                        System.exit(1);
                     }
                     else{
-
-                        Enumeration<String> enumeration = keyRing.aliases();
-
-                        while(enumeration.hasMoreElements()) {
-                            String alias = enumeration.nextElement();
-                            if(!alias.equals(clientName)){
-                                X509Certificate recipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
-                                byte[] encodedPGPdata = PGPUtilities.encode(userInput.getBytes(),personalKeyPair.getPrivate(),recipientCertificate.getPublicKey());
-                                PGPMessage pgpMessage = new PGPMessage(clientName,alias,encodedPGPdata);
-                                writeToStream(pgpMessage);
-                                logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", "<PGP>", pgpMessage.getSender()));
-                            }
-                        }
-
+                        byte[] plaintext = userInput.getBytes();
+                        sendPGPMessageToAll(plaintext,false);
                     }
 
                 }while(!userInput.equals("quit"));
