@@ -17,6 +17,7 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.util.logging.Logger;
+import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.Enumeration;
 
@@ -56,9 +57,8 @@ public class Client {
             Socket socket = new Socket(hostname, port);
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-            AtomicBoolean ready = new AtomicBoolean(false);
 
-            new IncomingHandler(socket, in, out, ready).start();
+            new IncomingHandler(socket, in, out).start();
 
         } catch (UnknownHostException e) {
             System.exit(1);
@@ -74,21 +74,32 @@ public class Client {
 
     public static void main(String[] args) throws NoSuchAlgorithmException {
         Client client;
-        logger.setLevel(Level.ALL);
-        PGPUtilities.logger.setLevel(Level.ALL);
+        ConsoleHandler ch = new ConsoleHandler();
 
-        if (args.length == 0) {
+        boolean debug = false;
+        if(args[args.length-1].equals("-debug")){
+            ch.setLevel(Level.ALL);
+            logger.addHandler(ch);
+            logger.setLevel(Level.ALL);
+            debug = true;
+        }
+        else{
+            ch.setLevel(Level.INFO);
+            logger.addHandler(ch);
+            logger.setLevel(Level.INFO);
+        }
+        if ((args.length == 1 && debug) || (args.length == 0 && !debug)) {
             client = new Client();
             client.setup();
             client.connectToServer();
-        } else if (args.length == 2) {
+        } else if ((args.length == 3 && debug) || (args.length == 2 && !debug)) {
             String hostname = args[0];
             int port = Integer.parseInt(args[1]);
             client = new Client(hostname, port);
             client.setup();
             client.connectToServer();
         } else {
-            logger.log(Level.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Client <host name> <port number>"));
+            logger.log(Level.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Client <host name> <port number> [-debug]"));
             System.exit(1);
         }
     }
@@ -128,13 +139,11 @@ public class Client {
         private Socket socket;
         private ObjectInputStream in;
         private ObjectOutputStream out;
-        private AtomicBoolean ready;
 
-        public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
+        public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
             this.in = in;
             this.out = out;
-            this.ready = ready;
         }
 
         // For concurrent writing to output stream
@@ -170,7 +179,7 @@ public class Client {
                         }else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
                             logger.log(Level.ALL, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CERT_BROADCAST"));
                             logger.log(Level.INFO, String.format(errTemplate, "[SERVER]", "Certificate broadcast, you may now send messages."));
-                            new OutgoingHandler(socket, in, out, ready).start(); //Client ready to send messages
+                            new OutgoingHandler(socket, in, out).start(); //Client ready to send messages
                         }
 
                     } else if (message instanceof CertificateMessage) {
@@ -207,7 +216,7 @@ public class Client {
                         logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getSender(), "IN", "<PGP>", pgpMessage.getReceiver()));
 
                         try {
-                            byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey());
+                            byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(), logger);
                             String plaintext = new String(decodedPGPdata);
                             System.out.println(sender+": "+plaintext);
                         } catch (InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException |
@@ -229,13 +238,11 @@ public class Client {
         private Socket socket;
         private ObjectOutputStream out;
         private ObjectInputStream in;
-        private AtomicBoolean ready;
 
-        public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out, AtomicBoolean ready) {
+        public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
             this.in = in;
             this.out = out;
-            this.ready = ready;
         }
 
         private void writeToStream(Object obj) throws IOException{
@@ -265,7 +272,7 @@ public class Client {
                             String alias = enumeration.nextElement();
                             if(!alias.equals(clientName)){
                                 X509Certificate recipientCertificate = (X509Certificate) keyRing.getCertificate(alias);
-                                byte[] encodedPGPdata = PGPUtilities.encode(userInput.getBytes(),personalKeyPair.getPrivate(),recipientCertificate.getPublicKey());
+                                byte[] encodedPGPdata = PGPUtilities.encode(userInput.getBytes(),personalKeyPair.getPrivate(),recipientCertificate.getPublicKey(), logger);
                                 PGPMessage pgpMessage = new PGPMessage(clientName,alias,encodedPGPdata);
                                 writeToStream(pgpMessage);
                                 logger.log(Level.ALL, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", "<PGP>", pgpMessage.getSender()));

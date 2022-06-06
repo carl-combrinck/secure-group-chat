@@ -42,7 +42,6 @@ public class PGPUtilities{
     /**
      * Class constants
      */
-    public final static Logger logger = Logger.getLogger(PGPUtilities.class.getName());
     private final static String RSA_ALGORITHM = "RSA/ECB/PKCS1Padding";
     private final static int RSA_KEY_SIZE = 2048;
     private final static String AES_ALGORITHM = "AES/CBC/PKCS5Padding";
@@ -335,7 +334,7 @@ public class PGPUtilities{
      * @param esesh The encrypted session data
      * @param pgp The PGP message
      */
-    private static void logEncode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp){
+    private static void logEncode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
         String log = "Encoding message...\n" +
         "RAW MESSAGE:" + line + "%s" + line +
@@ -361,7 +360,7 @@ public class PGPUtilities{
      * @param esesh The encrypted session data
      * @param pgp The PGP message
      */
-    private static void logDecode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp){
+    private static void logDecode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
         String log = "Decoding message...\n" +
         "PGP MESSAGE:" + line + "%s" + line +
@@ -391,7 +390,7 @@ public class PGPUtilities{
      * @throws IOException
      * @throws InvalidAlgorithmParameterException
      */
-    public static byte[] encode(byte[] message, Key senderPrivateKey, Key receiverPublicKey) throws InvalidKeyException, 
+    public static byte[] encode(byte[] message, Key senderPrivateKey, Key receiverPublicKey, Logger logger) throws InvalidKeyException, 
     NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException, 
     InvalidAlgorithmParameterException{
         // Sign and compress message
@@ -409,7 +408,7 @@ public class PGPUtilities{
         // Base/Radix 64 encode message
         byte[] encoded64Message = r64Encode(encodedMessage);
         // Logging
-        logEncode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
+        logEncode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
         return encoded64Message;
     }
 
@@ -430,7 +429,7 @@ public class PGPUtilities{
      * @throws IOException
      * @throws SignatureException
      */
-    public static byte[] decode(byte[] encoded64Message, Key receiverPrivateKey, Key senderPublicKey) throws InvalidKeyException, 
+    public static byte[] decode(byte[] encoded64Message, Key receiverPrivateKey, Key senderPublicKey, Logger logger) throws InvalidKeyException, 
     NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException, 
     IOException, SignatureException{
         // Decode base 64 message
@@ -454,7 +453,7 @@ public class PGPUtilities{
             throw new SignatureException("Invalid message signature");
         }
         // Logging
-        logDecode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage);
+        logDecode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
         return message;
     }
 }
