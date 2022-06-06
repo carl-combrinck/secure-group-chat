@@ -1,3 +1,5 @@
+@rem Batch file for executing SecureGroupChat application
+
 @ECHO off
 
 SET LIB_DIR=app\build\libs\app.jar;bouncy_castle\bcpg-jdk15to18-171.jar;bouncy_castle\bcpkix-jdk15to18-171.jar;bouncy_castle\bcprov-ext-jdk15to18-171.jar;bouncy_castle\bcutil-jdk15to18-171.jar
