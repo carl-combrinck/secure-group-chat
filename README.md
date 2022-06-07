@@ -64,6 +64,10 @@ To remove build-related artefacts and files, run:
 
 1. ```./gradlew clean```
 
+## Assumptions
+
+- When using the application, we assume client names entered are case-insenstive distinct (i.e. we do not permit "Carl" and "carl" as two separate client names, as certificate aliases are case-insensitive).
+
 ## Authors
 
 - Jaron Cohen
