@@ -32,8 +32,8 @@ import java.util.Enumeration;
  */
 public class Client {
     private final static Logger logger = Logger.getLogger(Client.class.getName());
-    private final static String logTemplate = "%-15s%-5s%-10s%s";
-    private final static String errTemplate = "%-15s%s";
+    private final static String logTemplate = "%-20s%-5s%-10s%s";
+    private final static String errTemplate = "%-20s%s";
     private final String hostname;
     private final int port;
     private final KeyPair personalKeyPair;
@@ -146,7 +146,7 @@ public class Client {
             client.setup();
             client.connectToServer();
         } else {
-            logger.log(LoggingLevel.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Client <host name> <port number> [-debug]"));
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[ARGS_ERR]", "Usage: java Client <host name> <port number> [-debug]"));
             System.exit(1);
         }
     }
@@ -240,15 +240,15 @@ public class Client {
 
                         // Successful Connection Message
                         if(commandMessage.getCommand().equals("CONN_SUCC")){
-                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CONN_SUCC"));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CMD>", "CONN_SUCC"));
                             logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SERVER]", "Connected to server."));
                             //Send client's certificate to the server
                             CertificateMessage certificateMessage = new CertificateMessage(clientName,"<ALL>", (X509Certificate) keyRing.getCertificate(clientName), false);
                             writeToStream(certificateMessage);
-                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", "BROADCAST"));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", "-> " + certificateMessage.getReceiver()));
                         }
                         else if(commandMessage.getCommand().equals("CERT_BROADCAST")){
-                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "CERT_BROADCAST"));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CMD>", "CERT_BROADCAST"));
                             logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SERVER]", "Certificate broadcast, you may now send messages."));
                             new OutgoingHandler(socket, in, out).start(); //Client ready to send messages
                         }
@@ -262,7 +262,7 @@ public class Client {
                             X500Name x500name = new JcaX509CertificateHolder(certificateMessage.getCertificate()).getSubject();
                             String CNalias = x500name.toString().substring(3);
 
-                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getSender(), "IN", "<CERT>", CNalias));
+                            logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CERT>", "<- " + CNalias));
 
                             try {
                                 CertificateAuthority ca = new CertificateAuthority();
@@ -273,7 +273,7 @@ public class Client {
                                     // Send client's certificate back as a reply
                                     CertificateMessage reply = new CertificateMessage(clientName, CNalias, (X509Certificate) keyRing.getCertificate(clientName), true);
                                     writeToStream(reply);
-                                    logger.log(LoggingLevel.DEBUG, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", CNalias));
+                                    logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", "-> " + reply.getReceiver()));
                                 }
 
                             } catch (Exception e) {
@@ -285,7 +285,7 @@ public class Client {
                         PGPMessage pgpMessage = (PGPMessage) message;
                         String sender = pgpMessage.getSender();
                         boolean protocol = pgpMessage.getProtocol();
-                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, pgpMessage.getSender(), "IN", protocol? "<PGP_CMD>" : "<PGP>", pgpMessage.getReceiver()));
+                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "IN", protocol ? "<PGP_CMD>" : "<PGP>", "<- " + pgpMessage.getSender()));
 
                         try {
                             byte[] decodedPGPdata = PGPUtilities.decode(pgpMessage.getPgpMessage(),personalKeyPair.getPrivate(),keyRing.getCertificate(sender).getPublicKey(), logger);
@@ -296,7 +296,7 @@ public class Client {
                                     removeFromKeyring(pgpMessage.getSender());
                                     logger.log(LoggingLevel.INFO, String.format(errTemplate, "[QUIT]", pgpMessage.getSender()+" has quit."));
                                 }
-                            }else{
+                            } else{
                                 System.out.println("<<< " + sender+": "+plaintext);
                             }
 
@@ -380,7 +380,7 @@ public class Client {
                         byte[] encodedPGPdata = PGPUtilities.encode(plaintext,personalKeyPair.getPrivate(),tempRecipientCertificate.getPublicKey(), logger);
                         PGPMessage pgpMessage = new PGPMessage(clientName,CNalias,encodedPGPdata,protocol);
                         writeToStream(pgpMessage);
-                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, pgpMessage.getReceiver(), "OUT", protocol ? "<PGP_CMD>" : "<PGP>", pgpMessage.getSender()));
+                        logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "OUT", protocol ? "<PGP_CMD>" : "<PGP>", "-> " + pgpMessage.getReceiver()));
                     }
                 }catch(Exception e){
                     e.printStackTrace();
