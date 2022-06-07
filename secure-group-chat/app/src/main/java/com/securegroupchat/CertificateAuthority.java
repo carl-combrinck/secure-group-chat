@@ -37,7 +37,7 @@ public class CertificateAuthority {
      * Class constants
      */
     private static final String KEYSTORENAME = "nis_group_chat_PKCS12";
-    private static final char[] KEYSTOREPASSWORD = "nis2020".toCharArray();
+    private static final char[] KEYSTOREPASSWORD = "nis2022".toCharArray();
     private KeyPair CAKeyPair;
 
     /**
