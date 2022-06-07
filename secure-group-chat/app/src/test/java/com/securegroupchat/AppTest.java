@@ -10,6 +10,7 @@ import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Random;
 import java.util.logging.Logger;
 
 import javax.crypto.BadPaddingException;
@@ -184,7 +185,7 @@ public class AppTest {
      * @throws BadPaddingException
      */
     @Test
-    public void testMessageCorruption() throws IOException, NoSuchAlgorithmException, InvalidKeyException,
+    public void testMessageSignatureCorruption() throws IOException, NoSuchAlgorithmException, InvalidKeyException,
             NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException {
         KeyPair pair = PGPUtilities.generateRSAKeyPair();
 
@@ -246,9 +247,53 @@ public class AppTest {
         KeyPair incorrectKeyPair = PGPUtilities.generateRSAKeyPair();
         byte[] encryptedSecretKey = PGPUtilities.encryptWithRSA(secretKey, correctKeyPair.getPublic());
 
-        assertThrows(Exception.class, () -> {
-            PGPUtilities.decryptWithRSA(encryptedSecretKey, incorrectKeyPair.getPrivate());
-        });
+        boolean flag = true;
+
+        try{
+            byte[] decryptedSecretKey = PGPUtilities.decryptWithRSA(encryptedSecretKey, incorrectKeyPair.getPrivate());
+            assertFalse(Arrays.equals(secretKey,decryptedSecretKey));
+        }catch(Exception e){
+            flag = false;
+        }
+
+        assertFalse(flag);
+
+    }
+
+    /**
+     * Tests if corruption of encoded PGP message is correctly detected
+     *
+     * @throws NoSuchAlgorithmException
+     * @throws InvalidAlgorithmParameterException
+     * @throws NoSuchPaddingException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws IOException
+     * @throws InvalidKeyException
+     */
+    @Test()
+    public void testPGPMessageCorruption() throws NoSuchAlgorithmException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException, InvalidKeyException, SignatureException {
+
+        KeyPair pairSender = PGPUtilities.generateRSAKeyPair();
+        KeyPair pairReceiver = PGPUtilities.generateRSAKeyPair();
+
+        byte[] plaintext = TEST_STRING.getBytes();
+        byte[] ciphertext = PGPUtilities.encode(plaintext,pairSender.getPrivate(),pairReceiver.getPublic(),logger);
+        Random generator = new Random();
+        int randomByteIndex = generator.nextInt(ciphertext.length);
+        byte[] corruptedCiphertext = Arrays.copyOf(ciphertext,ciphertext.length);
+        corruptedCiphertext[randomByteIndex] += 1;
+
+        boolean flag = true;
+        try{
+            byte[] corruptedPlaintext = PGPUtilities.decode(corruptedCiphertext,pairReceiver.getPrivate(),pairSender.getPublic(),logger);
+            assertFalse(Arrays.equals(plaintext,corruptedPlaintext));
+        }catch(Exception e){
+            flag = false;
+        }
+
+        assertFalse(flag);
+
     }
 
 }
