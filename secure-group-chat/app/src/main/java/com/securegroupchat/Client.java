@@ -52,8 +52,8 @@ public class Client {
 
     /**
      * Class constructor - specify server hostname and port
-     * @param hostname
-     * @param port
+     * @param hostname - hostname of the server
+     * @param port - port the server is listening on
      * @throws NoSuchAlgorithmException
      */
     public Client(String hostname, int port) throws NoSuchAlgorithmException {
@@ -88,7 +88,7 @@ public class Client {
     }
 
     /**
-     * Establishes client connection with server, created input and output object streams and starts incoming message handler
+     * Establishes client connection with server, creates input and output object streams and starts incoming message handler
      */
     private void connectToServer() {
         try {
@@ -119,7 +119,7 @@ public class Client {
 
     /**
      * Creates a client instance, performs setup and connects to server.
-     * @param args
+     * @param args - <host name> <port number> [-debug]
      * @throws NoSuchAlgorithmException
      */
     public static void main(String[] args) throws NoSuchAlgorithmException {
@@ -178,7 +178,7 @@ public class Client {
 
     /**
      * Sets name of client
-     * @param clientName
+     * @param clientName - alias or name the user will be using in the group chat
      */
     private void setClientName(String clientName){
         this.clientName = clientName;
@@ -207,9 +207,9 @@ public class Client {
 
         /**
          * Class constructor
-         * @param socket
-         * @param in
-         * @param out
+         * @param socket - socket established to communicate with the server
+         * @param in - ObjectInputStream for incoming message objects
+         * @param out ObjectOutputStream for outgoing message objects
          */
         public IncomingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
@@ -219,7 +219,7 @@ public class Client {
 
         /**
          * Concurrent writing to output stream
-         * @param obj
+         * @param obj - Object to write
          * @throws IOException
          */
         private void writeToStream(Object obj) throws IOException{
@@ -330,9 +330,9 @@ public class Client {
 
         /**
          * Class constructor
-         * @param socket
-         * @param in
-         * @param out
+         * @param socket - socket established to communicate with the server
+         * @param in - ObjectInputStream for incoming message objects
+         * @param out ObjectOutputStream for outgoing message objects
          */
         public OutgoingHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             this.socket = socket;
@@ -342,7 +342,7 @@ public class Client {
 
         /**
          * Concurrent writing to output stream
-         * @param obj
+         * @param obj - Object to write
          * @throws IOException
          */
         private void writeToStream(Object obj) throws IOException{
@@ -409,23 +409,11 @@ public class Client {
 
                 } while(!userInput.equals("quit"));
                 
-            } catch (IOException e) {
+            } catch (Error | KeyStoreException | IOException | InvalidAlgorithmParameterException |
+                    NoSuchPaddingException | IllegalBlockSizeException | NoSuchAlgorithmException |
+                    BadPaddingException | InvalidKeyException e) {
                 e.printStackTrace();
                 System.exit(1);
-            } catch (InvalidAlgorithmParameterException e) {
-                throw new RuntimeException(e);
-            } catch (NoSuchPaddingException e) {
-                throw new RuntimeException(e);
-            } catch (IllegalBlockSizeException e) {
-                throw new RuntimeException(e);
-            } catch (KeyStoreException e) {
-                throw new RuntimeException(e);
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException(e);
-            } catch (BadPaddingException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidKeyException e) {
-                throw new RuntimeException(e);
             }
         }
     }
