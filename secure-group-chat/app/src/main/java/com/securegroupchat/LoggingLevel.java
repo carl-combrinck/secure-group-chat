@@ -11,7 +11,9 @@ import java.util.logging.Level;
  * @version 1.0.0
  */
 public class LoggingLevel extends Level{
+    // DEBUG Level
     public static final Level DEBUG = new LoggingLevel("DEBUG", Level.INFO.intValue());
+    // INFO Level
     public static final Level INFO = new LoggingLevel("INFO", Level.WARNING.intValue());
 
     /**

@@ -136,7 +136,7 @@ public class Server {
 
         Server server;
         logger.setLevel(LoggingLevel.INFO);
-
+        // Command line arg parsing and server creation
         if (args.length == 0) {
             server = new Server();
             server.start();
@@ -154,20 +154,19 @@ public class Server {
      * Hands off incoming client connections to ClientHandler instances.
      */
     public void start() {
-
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             logger.log(LoggingLevel.INFO, String.format(errTemplate, "[INIT]", "Server starting..."));
             while (listening) {
                 logger.log(LoggingLevel.INFO, String.format(errTemplate, "[INIT]", "Server listening..."));
-                Socket socket = serverSocket.accept(); // listen for incoming client connections
-
+                // Listen for incoming client connections
+                Socket socket = serverSocket.accept(); 
+                // Create and start client handler
                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
                 ClientHandler clientHandler = new ClientHandler(socket, in, out);
                 addClientHandler(clientHandler);
                 clientHandler.start();
             }
-
         } catch (IOException e) {
             logger.log(LoggingLevel.INFO, String.format(errTemplate, "[PORT_ERR]", "Could not listen on port " + this.port));
             System.exit(-1);
@@ -233,16 +232,19 @@ public class Server {
             }
         }
 
+        /**
+         * Overriden run method - reads in messages from connected clients and performs action corresponding
+         * to specific type of message received
+         */
         public void run() {
-
             try {
-
+                // Alert client of successful connection
                 writeToStream(new CommandMessage("server", null, "CONN_SUCC"));
-
                 while (connectionActive) {
                     try {
                         Object message = in.readObject();
 
+                        // Certificate Messages
                         if (message instanceof CertificateMessage) {
 
                             CertificateMessage certificateMessage = (CertificateMessage) message;
@@ -254,10 +256,11 @@ public class Server {
                                     String CNalias = x500name.toString().substring(3);
                                     setClientName(CNalias);
                                 }catch (Exception e){
-                                    e.printStackTrace();
+                                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "[CERT_ERR]", "Certificate encoding error!"));
                                 }
 
                                 logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CERT>", certificateMessage.getSender(), certificateMessage.getReceiver()));
+                                // Broadcast client certificate
                                 Server.this.broadcastCertificate(certificateMessage);
 
                                 //Notify client that certificate has been broadcast - client can then begin sending messages
@@ -265,14 +268,17 @@ public class Server {
                                 writeToStream(broadcastReply);
                                 logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CMD>", "CERT_SENT", broadcastReply.getReceiver()));
 
-                            } // Otherwise received CertificateMessage for forwarding purposes
+                            } 
+                            // Otherwise received CertificateMessage for forwarding purposes
                             else{
                                 logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CERT>", certificateMessage.getSender(), certificateMessage.getReceiver()));
                                 // Forward certificate for client
                                 Server.this.forwardCertificate(certificateMessage);
                             }
 
-                        }else if (message instanceof PGPMessage){
+                        }
+                        // PGP Messages
+                        else if (message instanceof PGPMessage){
 
                             PGPMessage pgpMessage = (PGPMessage) message;
                             logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "IN", "<PGP>", pgpMessage.getSender(), pgpMessage.getReceiver()));
@@ -280,20 +286,16 @@ public class Server {
                             Server.this.forwardPGPMessage(pgpMessage);
                         }
                     } catch (IOException | ClassNotFoundException e) {
+                        // In case of connection error, deactivate connection and remove client handler
                         connectionActive = false;
                         Server.this.clientHandlers.remove(this);
                         logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SOCKET]", "Client " + this.clientName + " disconnected."));
                     }
                 }
-
                 clientSocket.close();
-
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SOCKET_ERR]", "Could not close socket properly."));
             }
-
         }
-
     }
-
 }

@@ -327,7 +327,6 @@ public class PGPUtilities{
     /** 
      * Logs PGP encoding information
      * 
-     * @param logger The logger
      * @param raw The raw message
      * @param sign The message signature
      * @param zip The compressed signed message
@@ -335,6 +334,7 @@ public class PGPUtilities{
      * @param emsg The encrypted message
      * @param esesh The encrypted session data
      * @param pgp The PGP message
+     * @param logger The logger
      */
     private static void logEncode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
@@ -346,6 +346,7 @@ public class PGPUtilities{
         "ENCRYPTED MESSAGE:" + line + "%s" + line +
         "ENCRYPTED SESSION:" + line + "%s" + line +
         "PGP MESSAGE:" + line + "%s" + line;
+        // Components are base 64 encoded before logging where appropriate (so that output is readable)
         logger.log(LoggingLevel.DEBUG, String.format(log, new String(raw), new String(r64Encode(sign)), new String(r64Encode(zip)), 
             new String(r64Encode(sesh)), new String(r64Encode(emsg)), new String(r64Encode(esesh)), new String(r64Encode(pgp))));
     }
@@ -353,14 +354,16 @@ public class PGPUtilities{
     /** 
      * Logs PGP decoding information
      * 
-     * @param logger The logger
      * @param raw The raw message
      * @param sign The message signature
+     * @param dhash The decrypted message hash/digest
+     * @param chash The computed message hash/digest
      * @param zip The compressed signed message
      * @param sesh The session data
      * @param emsg The encrypted message
      * @param esesh The encrypted session data
      * @param pgp The PGP message
+     * @param logger The logger
      */
     private static void logDecode(byte[] raw, byte[] sign, byte[] dhash, byte[] chash, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
@@ -374,6 +377,7 @@ public class PGPUtilities{
         "HASH (DECRYPTED)" +line+ "%s" + line +
         "HASH (COMPUTED)" +line+ "%s" + line +
         "RAW MESSAGE:" + line + "%s" + line;
+        // Components are base 64 encoded before logging where appropriate (so that output is readable)
         logger.log(LoggingLevel.DEBUG, String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
         new String(r64Encode(sesh)), new String(r64Encode(zip)), new String(r64Encode(sign)), new String(r64Encode(dhash)), new String(r64Encode(chash)), new String(raw)));
     }
@@ -457,7 +461,8 @@ public class PGPUtilities{
             throw new SignatureException("Invalid message signature");
         }
         // Logging
-        logDecode(message, signature, decryptWithRSA(signature, senderPublicKey), computeHash(message), compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
+        logDecode(message, signature, decryptWithRSA(signature, senderPublicKey), computeHash(message), compressedSignedMessage, 
+        sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
         return message;
     }
 }
