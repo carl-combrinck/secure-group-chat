@@ -36,19 +36,19 @@ Once the project is built, run the following commands to:
 
 1. Run the certificate authority
 1. Run the server
-1. Run 3 separate clients (```-debug``` flag is optional)
+1. Run 3 separate clients (```-debug``` flag displays detailed PGP message encoding/decoding and transmission logs, remove it to use the application normally)
 
 #### Windows
 
 1. ```run ca```
 1. ```run server```
-1. ```run client -debug``` (in 3 separate terminals)
+1. ```run client -debug``` or ```run client``` (in 3 separate terminals)
 
 #### Unix
 
 1. ```./run ca```
 1. ```./run server```
-1. ```./run client -debug``` (in 3 separate terminals)
+1. ```./run client -debug``` or ```./run client``` (in 3 separate terminals)
 
 To terminate a client application, simply type ```quit``` and press enter.
 
