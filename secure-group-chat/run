@@ -2,7 +2,12 @@
 
 # Bash script for executing SecureGroupChat application
 
-LIB_DIR="app/build/libs/app.jar:bouncy_castle/bcpg-jdk15to18-171.jar:bouncy_castle/bcpkix-jdk15to18-171.jar:bouncy_castle/bcprov-ext-jdk15to18-171.jar:bouncy_castle/bcutil-jdk15to18-171.jar"
+if [[ "$OSTYPE" == "msys" ]]
+then
+	LIB_DIR="app/build/libs/app.jar;bouncy_castle/bcpg-jdk15to18-171.jar;bouncy_castle/bcpkix-jdk15to18-171.jar;bouncy_castle/bcprov-ext-jdk15to18-171.jar;bouncy_castle/bcutil-jdk15to18-171.jar"
+else
+	LIB_DIR="app/build/libs/app.jar:bouncy_castle/bcpg-jdk15to18-171.jar:bouncy_castle/bcpkix-jdk15to18-171.jar:bouncy_castle/bcprov-ext-jdk15to18-171.jar:bouncy_castle/bcutil-jdk15to18-171.jar"
+fi
 
 if [[ $1 == "ca" ]]
 then
