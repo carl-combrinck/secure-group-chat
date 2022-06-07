@@ -73,13 +73,15 @@ public class Server {
     public void broadcastCertificate(CertificateMessage originalMessage){
         synchronized(this.clientHandlers){
             for(ClientHandler client : this.clientHandlers){
-                try {
-                    // Send new certificate message containing certificate to each client (this is not a reply certificate)
-                    CertificateMessage certificateMessage = new CertificateMessage(originalMessage.getSender(), client.getClientName(), originalMessage.getCertificate(), false);
-                    client.writeToStream(certificateMessage);
-                    logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", originalMessage.getSender(), certificateMessage.getReceiver()));
-                } catch (IOException e) {
-                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SEND_ERR]", "Could not forward certificate to " + client.getClientName()));
+                if(!client.clientName.equals(originalMessage.getSender())){
+                    try {
+                        // Send new certificate message containing certificate to each client (this is not a reply certificate)
+                        CertificateMessage certificateMessage = new CertificateMessage(originalMessage.getSender(), client.getClientName(), originalMessage.getCertificate(), false);
+                        client.writeToStream(certificateMessage);
+                        logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", originalMessage.getSender(), certificateMessage.getReceiver()));
+                    } catch (IOException e) {
+                        logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SEND_ERR]", "Could not forward certificate to " + client.getClientName()));
+                    }
                 }
             }
         }
@@ -100,6 +102,7 @@ public class Server {
                     }catch(IOException e){
                         logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SEND_ERR]", "Could not forward certificate to " + client.getClientName()));
                     }
+                    break;
                 }
             }
         }
@@ -171,6 +174,16 @@ public class Server {
         }
     }
 
+    /**
+     * ClientHandler is a private inner class that extends Thread and is spawned by the server for every accepted incoming
+     * client connection. The ClientHandler thread is responsible for receiving the message objects sent from the clients
+     * to the server and calling the necessary Server methods to forward/broadcast them according to the protocol.
+     *
+     * @author Jaron Cohen
+     * @author Carl Combrinck
+     * @author Bailey Green
+     * @version 1.0.0
+     */
     private class ClientHandler extends Thread {
         private Socket clientSocket;
         private ObjectOutputStream out;
@@ -178,6 +191,12 @@ public class Server {
         private String clientName = null;
         private boolean connectionActive = true;
 
+        /**
+         * Class constructor
+         * @param socket - socket created by server to communicate with connected client
+         * @param in - ObjectInputStream to read in message objects sent by client
+         * @param out - ObjectOutputStream to send message objects to client
+         */
         public ClientHandler(Socket socket, ObjectInputStream in, ObjectOutputStream out) {
             super();
             this.clientSocket = socket;
@@ -186,15 +205,28 @@ public class Server {
             logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SOCKET]", "New socket connection created."));
         }
 
+        /**
+         * Setter method to store client's group chat name/alias
+         * @param clientName
+         */
         private void setClientName(String clientName){
             this.clientName = clientName;
         }
 
+        /**
+         * Getter method to retrieve client's group chat name/alias
+         * @return
+         */
         private String getClientName(){
             return clientName;
         }
 
-        // Concurrent writing to output stream
+
+        /**
+         * Concurrent writing to ObjectOutputStream
+         * @param obj - Object to write
+         * @throws IOException
+         */
         public void writeToStream(Object obj) throws IOException{
             synchronized(this.out){
                 out.writeObject(obj);
