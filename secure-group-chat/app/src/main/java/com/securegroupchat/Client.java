@@ -405,6 +405,7 @@ public class Client {
                     else{
                         byte[] plaintext = userInput.getBytes();
                         sendPGPMessageToAll(plaintext,false);
+                        System.out.println(">>> You: " + userInput);
                     }
 
                 } while(!userInput.equals("quit"));
