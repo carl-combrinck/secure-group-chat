@@ -50,6 +50,8 @@ Once the project is built, run the following commands to:
 1. ```./run server```
 1. ```./run client -debug``` (in 3 separate terminals)
 
+To terminate a client application, simply type ```quit``` and press enter.
+
 ### Clean
 
 To remove build-related artefacts and files, run:
