@@ -26,8 +26,8 @@ public class Server {
     private boolean listening = true;
     // Logging constants
     private final static Logger logger = Logger.getLogger(Client.class.getName());
-    private final static String logTemplate = "%-15s%-5s%-10s%s";
-    private final static String errTemplate = "%-15s%s";
+    private final static String logTemplate = "%-20s%-5s%-10s%15s -> %s";
+    private final static String errTemplate = "%-20s%s";
     // Client handlers
     private final Set<ClientHandler> clientHandlers = new HashSet<>();
 
@@ -77,9 +77,9 @@ public class Server {
                     // Send new certificate message containing certificate to each client (this is not a reply certificate)
                     CertificateMessage certificateMessage = new CertificateMessage(originalMessage.getSender(), client.getClientName(), originalMessage.getCertificate(), false);
                     client.writeToStream(certificateMessage);
-                    logger.log(LoggingLevel.INFO, String.format(logTemplate, certificateMessage.getReceiver(), "OUT", "<CERT>", client.getClientName()));
+                    logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", originalMessage.getSender(), certificateMessage.getReceiver()));
                 } catch (IOException e) {
-                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "SEND_ERR", "Could not forward certificate to " + client.getClientName()));
+                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SEND_ERR]", "Could not forward certificate to " + client.getClientName()));
                 }
             }
         }
@@ -96,9 +96,9 @@ public class Server {
                 if(client.clientName.equals(originalMessage.getReceiver())){
                     try {
                         client.writeToStream(originalMessage);
-                        logger.log(LoggingLevel.INFO, String.format(logTemplate, originalMessage.getReceiver(), "OUT", "<CERT>", originalMessage.getSender()));
+                        logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", originalMessage.getSender(), originalMessage.getReceiver()));
                     }catch(IOException e){
-                        logger.log(LoggingLevel.INFO, String.format(errTemplate, "SEND_ERR", "Could not forward certificate to " + client.getClientName()));
+                        logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SEND_ERR]", "Could not forward certificate to " + client.getClientName()));
                     }
                 }
             }
@@ -116,9 +116,9 @@ public class Server {
                 if(client.clientName.equals(originalMessage.getReceiver())){
                     try {
                         client.writeToStream(originalMessage);
-                        logger.log(LoggingLevel.INFO, String.format(logTemplate, originalMessage.getReceiver(), "OUT", "<PGP>", originalMessage.getSender()));
+                        logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<PGP>", originalMessage.getSender(), originalMessage.getReceiver()));
                     }catch(IOException e){
-                        logger.log(LoggingLevel.INFO, String.format(errTemplate, "SEND_ERR", "Could not forward PGP message to " + client.getClientName()));
+                        logger.log(LoggingLevel.INFO, String.format(errTemplate, "[SEND_ERR]", "Could not forward PGP message to " + client.getClientName()));
                     }
                 }
             }
@@ -141,7 +141,7 @@ public class Server {
             server = new Server(Integer.parseInt(args[0]));
             server.start();
         } else {
-            logger.log(LoggingLevel.INFO, String.format(errTemplate, "ARGS_ERR", "Usage: java Server <port number>"));
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[ARGS_ERR]", "Usage: java Server <port number>"));
             System.exit(1);
         }
     }
@@ -166,7 +166,7 @@ public class Server {
             }
 
         } catch (IOException e) {
-            logger.log(LoggingLevel.INFO, String.format(errTemplate, "PORT_ERR", "Could not listen on port " + this.port));
+            logger.log(LoggingLevel.INFO, String.format(errTemplate, "[PORT_ERR]", "Could not listen on port " + this.port));
             System.exit(-1);
         }
     }
@@ -211,24 +211,7 @@ public class Server {
                     try {
                         Object message = in.readObject();
 
-                        if (message instanceof CommandMessage){
-
-                            CommandMessage commandMessage = (CommandMessage) message;
-
-                            // Quit Command
-                            if(commandMessage.getCommand().equals("QUIT")){
-                                logger.log(LoggingLevel.INFO, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "QUIT"));
-                                CommandMessage done = new CommandMessage("server", commandMessage.getSender(), "CONN_END");
-                                writeToStream(done);
-                                logger.log(LoggingLevel.INFO, String.format(logTemplate, commandMessage.getSender(), "OUT", "<CMD>", "DONE"));
-                                connectionActive = false;
-                                Server.this.removeClientHandler(this);
-                            }
-                            else{
-                                logger.log(LoggingLevel.INFO, String.format(logTemplate, commandMessage.getSender(), "IN", "<CMD>", "UNKNOWN"));
-                            }
-
-                        } else if (message instanceof CertificateMessage) {
+                        if (message instanceof CertificateMessage) {
 
                             CertificateMessage certificateMessage = (CertificateMessage) message;
 
@@ -242,17 +225,17 @@ public class Server {
                                     e.printStackTrace();
                                 }
 
+                                logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CERT>", certificateMessage.getSender(), certificateMessage.getReceiver()));
                                 Server.this.broadcastCertificate(certificateMessage);
-                                logger.log(LoggingLevel.INFO, String.format(logTemplate, certificateMessage.getSender(), "IN", "<CERT>", certificateMessage.getReceiver()));
 
                                 //Notify client that certificate has been broadcast - client can then begin sending messages
                                 CommandMessage broadcastReply = new CommandMessage("server", getClientName(),"CERT_BROADCAST");
                                 writeToStream(broadcastReply);
-                                logger.log(LoggingLevel.INFO, String.format(logTemplate, broadcastReply.getReceiver(), "OUT", "<CMD>", "CERT_SENT"));
+                                logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CMD>", "CERT_SENT", broadcastReply.getReceiver()));
 
                             } // Otherwise received CertificateMessage for forwarding purposes
                             else{
-                                logger.log(LoggingLevel.INFO, String.format(logTemplate, certificateMessage.getSender(), "IN", "<CERT>", certificateMessage.getReceiver()));
+                                logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "IN", "<CERT>", certificateMessage.getSender(), certificateMessage.getReceiver()));
                                 // Forward certificate for client
                                 Server.this.forwardCertificate(certificateMessage);
                             }
@@ -260,7 +243,7 @@ public class Server {
                         }else if (message instanceof PGPMessage){
 
                             PGPMessage pgpMessage = (PGPMessage) message;
-                            logger.log(LoggingLevel.INFO, String.format(logTemplate, pgpMessage.getSender(), "IN", "<PGP>", pgpMessage.getReceiver()));
+                            logger.log(LoggingLevel.INFO, String.format(logTemplate, "[TRANSMISSION]", "IN", "<PGP>", pgpMessage.getSender(), pgpMessage.getReceiver()));
                             //Forward message for client
                             Server.this.forwardPGPMessage(pgpMessage);
                         }

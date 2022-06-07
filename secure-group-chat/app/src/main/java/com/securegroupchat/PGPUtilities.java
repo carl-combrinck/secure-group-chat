@@ -362,7 +362,7 @@ public class PGPUtilities{
      * @param esesh The encrypted session data
      * @param pgp The PGP message
      */
-    private static void logDecode(byte[] raw, byte[] sign, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
+    private static void logDecode(byte[] raw, byte[] sign, byte[] dhash, byte[] chash, byte[] zip, byte[] sesh, byte[] emsg, byte[] esesh, byte[] pgp, Logger logger){
         final String line = "\n--------------------------\n";
         String log = "Decoding message...\n" +
         "PGP MESSAGE:" + line + "%s" + line +
@@ -371,9 +371,11 @@ public class PGPUtilities{
         "SESSION KEY AND IV:" + line + "%s" + line +
         "COMPRESSED:" + line + "%s" + line +
         "SIGNATURE:" + line+ "%s" + line +
+        "HASH (DECRYPTED)" +line+ "%s" + line +
+        "HASH (COMPUTED)" +line+ "%s" + line +
         "RAW MESSAGE:" + line + "%s" + line;
         logger.log(LoggingLevel.DEBUG, String.format(log, new String(r64Encode(pgp)), new String(r64Encode(esesh)), new String(r64Encode(emsg)), 
-        new String(r64Encode(sesh)), new String(r64Encode(zip)), new String(r64Encode(sign)), new String(raw)));
+        new String(r64Encode(sesh)), new String(r64Encode(zip)), new String(r64Encode(sign)), new String(r64Encode(dhash)), new String(r64Encode(chash)), new String(raw)));
     }
 
     /** 
@@ -455,7 +457,7 @@ public class PGPUtilities{
             throw new SignatureException("Invalid message signature");
         }
         // Logging
-        logDecode(message, signature, compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
+        logDecode(message, signature, decryptWithRSA(signature, senderPublicKey), computeHash(message), compressedSignedMessage, sessionData, encryptedMessage, encryptedSessionData, encodedMessage, logger);
         return message;
     }
 }
