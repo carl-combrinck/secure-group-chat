@@ -291,6 +291,7 @@ public class Client {
                                     CertificateMessage reply = new CertificateMessage(clientName, CNalias, (X509Certificate) keyRing.getCertificate(clientName), true);
                                     writeToStream(reply);
                                     logger.log(LoggingLevel.DEBUG, String.format(logTemplate, "[TRANSMISSION]", "OUT", "<CERT>", "-> " + reply.getReceiver()));
+                                    logger.log(LoggingLevel.INFO, String.format(errTemplate, "[ADDED]", certificateMessage.getSender()+" has joined the group."));
                                 }
                             } catch (Exception e) {
                                 logger.log(LoggingLevel.INFO, String.format(errTemplate, "[CERT]", "Certificate for " + CNalias + " is not valid!"));
@@ -299,7 +300,7 @@ public class Client {
 
                     }
                     // PGP Messages
-                    else if (message instanceof  PGPMessage){
+                    else if (message instanceof PGPMessage){
                         PGPMessage pgpMessage = (PGPMessage) message;
                         String sender = pgpMessage.getSender();
                         boolean protocol = pgpMessage.getProtocol();
